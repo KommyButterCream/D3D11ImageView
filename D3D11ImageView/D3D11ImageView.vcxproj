@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\Image Tile\TileManager.cpp" />
+    <ClCompile Include="..\Image Tile\TilePool.cpp" />
+    <ClCompile Include="..\Overlay Renderer\OverlayEllipseRenderer.cpp" />
+    <ClCompile Include="..\Overlay Renderer\OverlayLineRenderer.cpp" />
+    <ClCompile Include="..\Overlay Renderer\OverlayPointRenderer.cpp" />
+    <ClCompile Include="..\Overlay Renderer\OverlayPolyShapeRenderer.cpp" />
+    <ClCompile Include="..\Overlay Renderer\OverlayRectangleRenderer.cpp" />
+    <ClCompile Include="..\Render Layer\ImageCenterRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\ImageRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\OverlayRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\ROIRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\SelectionRectRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\UIRenderLayer.cpp" />
+    <ClCompile Include="..\ROI Renderer\ROICircleRenderer.cpp" />
+    <ClCompile Include="..\ROI Renderer\ROIEllipseRenderer.cpp" />
+    <ClCompile Include="..\ROI Renderer\ROIPolygonRenderer.cpp" />
+    <ClCompile Include="..\ROI Renderer\ROIRectangleRenderer.cpp" />
+    <ClCompile Include="HighResolutionTimer.cpp" />
+    <ClCompile Include="ImageView.cpp" />
+    <ClCompile Include="ImageView_Impl.cpp" />
+    <ClCompile Include="ImageView_Impl_Image.cpp" />
+    <ClCompile Include="ImageView_Impl_Overlay.cpp" />
+    <ClCompile Include="ImageView_Impl_ROI.cpp" />
+    <ClCompile Include="ImageView_Impl_WMHandler.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="RenderThread.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Image Tile\Tile.h" />
+    <ClInclude Include="..\Image Tile\TileManager.h" />
+    <ClInclude Include="..\Image Tile\TilePool.h" />
+    <ClInclude Include="..\Overlay Renderer\IOverlayObject.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayEllipseRenderer.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayLineRenderer.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayPointRenderer.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayPolyShapeRenderer.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayRectangleRenderer.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayRenderContext.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayTypes.h" />
+    <ClInclude Include="..\Render Layer\ImageCenterRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\ImageRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\OverlayRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\ROIRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\SelectionRectRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\UIRenderLayer.h" />
+    <ClInclude Include="..\ROI Renderer\IROIObject.h" />
+    <ClInclude Include="..\ROI Renderer\ROICircleRenderer.h" />
+    <ClInclude Include="..\ROI Renderer\ROIEllipseRenderer.h" />
+    <ClInclude Include="..\ROI Renderer\ROIPolygonRenderer.h" />
+    <ClInclude Include="..\ROI Renderer\ROIRectangleRenderer.h" />
+    <ClInclude Include="..\ROI Renderer\ROIRenderContext.h" />
+    <ClInclude Include="..\ROI Renderer\ROIUtilities.h" />
+    <ClInclude Include="HighResolutionTimer.h" />
+    <ClInclude Include="ImageView.h" />
+    <ClInclude Include="ImageView_Impl.h" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="RenderThread.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\Core\Core.vcxproj">
+      <Project>{e3bd70c4-fc37-4703-9a54-152fd00bdea2}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\D3D11Engine\D3D11Engine\D3D11Engine.vcxproj">
+      <Project>{ec25124d-4c9f-40f6-8b16-ecd4db749cc8}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\D3D11UIFramework\D3D11UIFramework\D3D11UIFramework.vcxproj">
+      <Project>{6dcaca2e-50c3-4152-8eb9-4f7025a9537e}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{fe98804b-55c7-4bca-bed6-d8785817afc1}</ProjectGuid>
+    <RootNamespace>D3D11ImageView</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;BUILD_D3D11_IMAGE_VIEW_DLL;D3D11_ENGINE_INTERFACE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;BUILD_D3D11_IMAGE_VIEW_DLL;D3D11_ENGINE_INTERFACE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

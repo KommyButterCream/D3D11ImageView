@@ -1,0 +1,83 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37203.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D11ImageView", "D3D11ImageView\D3D11ImageView.vcxproj", "{FE98804B-55C7-4BCA-BED6-D8785817AFC1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{C8D5274F-AC00-46C7-1F8D-E88E81087A52}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D11Engine", "..\D3D11Engine\D3D11Engine\D3D11Engine.vcxproj", "{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Core", "..\Core\Core\Core.vcxproj", "{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D11UIFramework", "..\D3D11UIFramework\D3D11UIFramework\D3D11UIFramework.vcxproj", "{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "D3D11EngineInterface", "D3D11EngineInterface", "{B8AE3B4D-2BAC-4250-892E-9C724706AC5C}"
+	ProjectSection(SolutionItems) = preProject
+		..\D3D11EngineInterface\D3D11EngineInterfaceAPI.h = ..\D3D11EngineInterface\D3D11EngineInterfaceAPI.h
+		..\D3D11EngineInterface\IDeviceEventListener.h = ..\D3D11EngineInterface\IDeviceEventListener.h
+		..\D3D11EngineInterface\IOverlayRenderer.h = ..\D3D11EngineInterface\IOverlayRenderer.h
+		..\D3D11EngineInterface\IRenderContext.h = ..\D3D11EngineInterface\IRenderContext.h
+		..\D3D11EngineInterface\IRenderEngine.h = ..\D3D11EngineInterface\IRenderEngine.h
+		..\D3D11EngineInterface\IRenderLayer.h = ..\D3D11EngineInterface\IRenderLayer.h
+		..\D3D11EngineInterface\IRenderStructures.h = ..\D3D11EngineInterface\IRenderStructures.h
+		..\D3D11EngineInterface\IResizeEventListener.h = ..\D3D11EngineInterface\IResizeEventListener.h
+		..\D3D11EngineInterface\IUIElement.h = ..\D3D11EngineInterface\IUIElement.h
+		..\D3D11EngineInterface\IUIRenderLayer.h = ..\D3D11EngineInterface\IUIRenderLayer.h
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Debug|x64.ActiveCfg = Debug|x64
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Debug|x64.Build.0 = Debug|x64
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Debug|x86.ActiveCfg = Debug|Win32
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Debug|x86.Build.0 = Debug|Win32
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Release|x64.ActiveCfg = Release|x64
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Release|x64.Build.0 = Release|x64
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Release|x86.ActiveCfg = Release|Win32
+		{FE98804B-55C7-4BCA-BED6-D8785817AFC1}.Release|x86.Build.0 = Release|Win32
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Debug|x64.ActiveCfg = Debug|x64
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Debug|x64.Build.0 = Debug|x64
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Debug|x86.ActiveCfg = Debug|Win32
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Debug|x86.Build.0 = Debug|Win32
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Release|x64.ActiveCfg = Release|x64
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Release|x64.Build.0 = Release|x64
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Release|x86.ActiveCfg = Release|Win32
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8}.Release|x86.Build.0 = Release|Win32
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Debug|x64.ActiveCfg = Debug|x64
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Debug|x64.Build.0 = Debug|x64
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Debug|x86.ActiveCfg = Debug|Win32
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Debug|x86.Build.0 = Debug|Win32
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Release|x64.ActiveCfg = Release|x64
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Release|x64.Build.0 = Release|x64
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Release|x86.ActiveCfg = Release|Win32
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2}.Release|x86.Build.0 = Release|Win32
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Debug|x64.ActiveCfg = Debug|x64
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Debug|x64.Build.0 = Debug|x64
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Debug|x86.ActiveCfg = Debug|Win32
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Debug|x86.Build.0 = Debug|Win32
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x64.ActiveCfg = Release|x64
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x64.Build.0 = Release|x64
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x86.ActiveCfg = Release|Win32
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{EC25124D-4C9F-40F6-8B16-ECD4DB749CC8} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{B8AE3B4D-2BAC-4250-892E-9C724706AC5C} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FD6DFA0C-D976-40B5-BF94-E4CEDB250DB1}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,194 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Image Tile">
+      <UniqueIdentifier>{2071d5d0-f2dd-4ba0-a1df-e7fcfa466797}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Overlay Renderer">
+      <UniqueIdentifier>{368aba60-1505-4e08-8085-72f66573b5dc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ROI Renderer">
+      <UniqueIdentifier>{6493cc7c-b2f4-465f-8550-bd6ecfc1c193}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render Layer">
+      <UniqueIdentifier>{76f90e8e-675a-4cdf-8e9b-37149a543730}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Image Tile\TileManager.cpp">
+      <Filter>Image Tile</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Image Tile\TilePool.cpp">
+      <Filter>Image Tile</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Overlay Renderer\OverlayEllipseRenderer.cpp">
+      <Filter>Overlay Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Overlay Renderer\OverlayLineRenderer.cpp">
+      <Filter>Overlay Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Overlay Renderer\OverlayPointRenderer.cpp">
+      <Filter>Overlay Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Overlay Renderer\OverlayPolyShapeRenderer.cpp">
+      <Filter>Overlay Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Overlay Renderer\OverlayRectangleRenderer.cpp">
+      <Filter>Overlay Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ROI Renderer\ROICircleRenderer.cpp">
+      <Filter>ROI Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ROI Renderer\ROIEllipseRenderer.cpp">
+      <Filter>ROI Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ROI Renderer\ROIPolygonRenderer.cpp">
+      <Filter>ROI Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ROI Renderer\ROIRectangleRenderer.cpp">
+      <Filter>ROI Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\ImageCenterRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\ImageRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\OverlayRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\ROIRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\SelectionRectRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\UIRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="HighResolutionTimer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageView.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageView_Impl.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageView_Impl_Image.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageView_Impl_Overlay.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageView_Impl_ROI.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageView_Impl_WMHandler.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderThread.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Image Tile\Tile.h">
+      <Filter>Image Tile</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Image Tile\TileManager.h">
+      <Filter>Image Tile</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Image Tile\TilePool.h">
+      <Filter>Image Tile</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayEllipseRenderer.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayLineRenderer.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayPointRenderer.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayPolyShapeRenderer.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayRectangleRenderer.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayRenderContext.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayTypes.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\IROIObject.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROICircleRenderer.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROIEllipseRenderer.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROIPolygonRenderer.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROIRectangleRenderer.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROIRenderContext.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROIUtilities.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\ImageCenterRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\ImageRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\OverlayRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\ROIRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\SelectionRectRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\UIRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\IOverlayObject.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="HighResolutionTimer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageView.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageView_Impl.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderThread.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
