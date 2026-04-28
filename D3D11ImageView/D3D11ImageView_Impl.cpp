@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "ImageView_Impl.h"
+#include "D3D11ImageView_Impl.h"
 
 // Interface
 #include "../../../Module/D3D11EngineInterface/IRenderLayer.h"
@@ -39,12 +39,12 @@
 using namespace Core::ShapeType;
 using namespace Core::ImageType;
 
-ImageView_Impl::ImageView_Impl()
+D3D11ImageView_Impl::D3D11ImageView_Impl()
 {
 
 }
 
-ImageView_Impl::~ImageView_Impl()
+D3D11ImageView_Impl::~D3D11ImageView_Impl()
 {
 	if (m_hWnd && ::IsWindow(m_hWnd))
 	{
@@ -53,7 +53,7 @@ ImageView_Impl::~ImageView_Impl()
 	}
 }
 
-bool ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
+bool D3D11ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 {
 	m_isFinalized = false;
 
@@ -62,8 +62,8 @@ bool ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 	// Window
 	if (!WindowBase::Create(
 		0,
-		L"ImageViewClass",
-		L"ImageViewWindow",
+		L"D3D11ImageViewClass",
+		L"D3D11ImageViewWindow",
 		style,
 		CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
 		rect,
@@ -183,7 +183,7 @@ bool ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 
 	// UI Event Dispatch
 	m_uiEventDispatcher = std::make_unique<UIEventDispatcher>();
-	m_uiEventDispatcher->RegisterCallback(&ImageView_Impl::OnUICommand, this);
+	m_uiEventDispatcher->RegisterCallback(&D3D11ImageView_Impl::OnUICommand, this);
 
 	// Render UI
 	m_uiLayer = std::make_unique<UIRenderLayer>();
@@ -202,7 +202,7 @@ bool ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 	InvalidateFrame();
 
 	m_renderThread->SetRenderFPS(120.0);
-	m_renderThread->SetRenderFunction(&ImageView_Impl::RenderCallback, this);
+	m_renderThread->SetRenderFunction(&D3D11ImageView_Impl::RenderCallback, this);
 
 	if (!m_renderThread->StartThread())
 		return failInitialize();
@@ -210,7 +210,7 @@ bool ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 	return true;
 }
 
-void ImageView_Impl::Finalize()
+void D3D11ImageView_Impl::Finalize()
 {
 	if (m_isFinalized)
 		return;
@@ -277,22 +277,22 @@ void ImageView_Impl::Finalize()
 	}
 }
 
-HWND ImageView_Impl::GetHWND() const
+HWND D3D11ImageView_Impl::GetHWND() const
 {
 	return WindowBase::GetHWND();
 }
 
-ID3D11Device* ImageView_Impl::GetDevice() const
+ID3D11Device* D3D11ImageView_Impl::GetDevice() const
 {
 	return m_renderEngine ? m_renderEngine->GetD3DDevice() : nullptr;
 }
 
-ID3D11DeviceContext* ImageView_Impl::GetDeviceContext() const
+ID3D11DeviceContext* D3D11ImageView_Impl::GetDeviceContext() const
 {
 	return m_renderEngine ? m_renderEngine->GetD3DDeviceContext() : nullptr;
 }
 
-bool ImageView_Impl::Render(uint64_t frameID)
+bool D3D11ImageView_Impl::Render(uint64_t frameID)
 {
 	if (!m_renderContext)
 		return false;
@@ -356,7 +356,7 @@ bool ImageView_Impl::Render(uint64_t frameID)
 	return isCameraAnimating || isUiAnimating || m_isDirty;
 }
 
-UIEventResult ImageView_Impl::HandleMouseEventUI(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY)
+UIEventResult D3D11ImageView_Impl::HandleMouseEventUI(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY)
 {
 	UIEventResult uiEventResult = UIEventResult::None;
 
@@ -377,9 +377,9 @@ UIEventResult ImageView_Impl::HandleMouseEventUI(UIMouseEventType type, int32_t 
 	return uiEventResult;
 }
 
-void ImageView_Impl::OnUICommand(UICommand command, void* userData)
+void D3D11ImageView_Impl::OnUICommand(UICommand command, void* userData)
 {
-	auto* self = static_cast<ImageView_Impl*>(userData);
+	auto* self = static_cast<D3D11ImageView_Impl*>(userData);
 
 	if (!self)
 		return;
@@ -387,7 +387,7 @@ void ImageView_Impl::OnUICommand(UICommand command, void* userData)
 	self->HandleUICommand(command);
 }
 
-void ImageView_Impl::HandleUICommand(UICommand command)
+void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 {
 	switch (command)
 	{
@@ -414,7 +414,7 @@ void ImageView_Impl::HandleUICommand(UICommand command)
 	}
 }
 
-void ImageView_Impl::Zoom(float zoomFactor)
+void D3D11ImageView_Impl::Zoom(float zoomFactor)
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -428,7 +428,7 @@ void ImageView_Impl::Zoom(float zoomFactor)
 	InvalidateFrame();
 }
 
-void ImageView_Impl::ZoomIn()
+void D3D11ImageView_Impl::ZoomIn()
 {
 	constexpr float zoomSpeed = m_defaultZoomFactor;
 
@@ -441,7 +441,7 @@ void ImageView_Impl::ZoomIn()
 	InvalidateFrame();
 }
 
-void ImageView_Impl::ZoomOut()
+void D3D11ImageView_Impl::ZoomOut()
 {
 	constexpr float zoomSpeed = m_defaultZoomFactor;
 
@@ -452,7 +452,7 @@ void ImageView_Impl::ZoomOut()
 	InvalidateFrame();
 }
 
-void ImageView_Impl::Zoom1To1()
+void D3D11ImageView_Impl::Zoom1To1()
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -464,7 +464,7 @@ void ImageView_Impl::Zoom1To1()
 	InvalidateFrame();
 }
 
-void ImageView_Impl::ZoomFit()
+void D3D11ImageView_Impl::ZoomFit()
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -476,7 +476,7 @@ void ImageView_Impl::ZoomFit()
 	InvalidateFrame();
 }
 
-void ImageView_Impl::Zoom(float zoomFactor, int32_t mousePosX, int32_t mousePosY)
+void D3D11ImageView_Impl::Zoom(float zoomFactor, int32_t mousePosX, int32_t mousePosY)
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -488,7 +488,7 @@ void ImageView_Impl::Zoom(float zoomFactor, int32_t mousePosX, int32_t mousePosY
 	InvalidateFrame();
 }
 
-void ImageView_Impl::Zoom1To1(int32_t mousePosX, int32_t mousePosY)
+void D3D11ImageView_Impl::Zoom1To1(int32_t mousePosX, int32_t mousePosY)
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -500,14 +500,14 @@ void ImageView_Impl::Zoom1To1(int32_t mousePosX, int32_t mousePosY)
 	InvalidateFrame();
 }
 
-void ImageView_Impl::BeginPan(int32_t mouseX, int32_t mouseY)
+void D3D11ImageView_Impl::BeginPan(int32_t mouseX, int32_t mouseY)
 {
 	m_camera->BeginPan(static_cast<float>(mouseX), static_cast<float>(mouseY));
 
 	InvalidateFrame();
 }
 
-void ImageView_Impl::UpdatePan(int32_t mouseX, int32_t mouseY)
+void D3D11ImageView_Impl::UpdatePan(int32_t mouseX, int32_t mouseY)
 {
 	float dt = m_renderContext->GetDeltaTime();
 
@@ -516,14 +516,14 @@ void ImageView_Impl::UpdatePan(int32_t mouseX, int32_t mouseY)
 	InvalidateFrame();
 }
 
-void ImageView_Impl::EndPan(int32_t mouseX, int32_t mouseY)
+void D3D11ImageView_Impl::EndPan(int32_t mouseX, int32_t mouseY)
 {
 	m_camera->EndPan();
 
 	InvalidateFrame();
 }
 
-void ImageView_Impl::BeginSelection(const Point2i& point)
+void D3D11ImageView_Impl::BeginSelection(const Point2i& point)
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -533,7 +533,7 @@ void ImageView_Impl::BeginSelection(const Point2i& point)
 	InvalidateFrame();
 }
 
-void ImageView_Impl::UpdateSelection(const Point2i& point)
+void D3D11ImageView_Impl::UpdateSelection(const Point2i& point)
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -543,7 +543,7 @@ void ImageView_Impl::UpdateSelection(const Point2i& point)
 	InvalidateFrame();
 }
 
-void ImageView_Impl::EndSelection(const Point2i& point)
+void D3D11ImageView_Impl::EndSelection(const Point2i& point)
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -553,7 +553,7 @@ void ImageView_Impl::EndSelection(const Point2i& point)
 	InvalidateFrame();
 }
 
-void ImageView_Impl::ToggleImageCenterCrossLine()
+void D3D11ImageView_Impl::ToggleImageCenterCrossLine()
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -563,7 +563,7 @@ void ImageView_Impl::ToggleImageCenterCrossLine()
 	InvalidateFrame();
 }
 
-void ImageView_Impl::ShowImageCenterCrossLine()
+void D3D11ImageView_Impl::ShowImageCenterCrossLine()
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -573,7 +573,7 @@ void ImageView_Impl::ShowImageCenterCrossLine()
 	InvalidateFrame();
 }
 
-void ImageView_Impl::HideImageCenterCrossLine()
+void D3D11ImageView_Impl::HideImageCenterCrossLine()
 {
 	if (!m_camera || m_layers.empty())
 		return;
@@ -583,7 +583,7 @@ void ImageView_Impl::HideImageCenterCrossLine()
 	InvalidateFrame();
 }
 
-bool ImageView_Impl::GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4])
+bool D3D11ImageView_Impl::GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4])
 {
 	if (!image || image->IsEmpty() || !image->IsInside(x, y))
 		return false;
@@ -606,7 +606,7 @@ bool ImageView_Impl::GetPixelValueForStatusbar(const ImageBase* image, int32_t x
 	return true;
 }
 
-void ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
+void D3D11ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
 {
 	if (!m_camera || !m_uiLayer)
 		return;
@@ -646,21 +646,21 @@ void ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
 	InvalidateFrame();
 }
 
-bool ImageView_Impl::RenderCallback(void* param)
+bool D3D11ImageView_Impl::RenderCallback(void* param)
 {
 	RenderContext* renderContext = static_cast<RenderContext*>(param);
 
-	ImageView_Impl* imageView = static_cast<ImageView_Impl*>(renderContext->imageViewImpl);
-	if (imageView)
+	D3D11ImageView_Impl* D3D11ImageView = static_cast<D3D11ImageView_Impl*>(renderContext->imageViewImpl);
+	if (D3D11ImageView)
 	{
 		uint64_t frameId = renderContext->frameID;
-		return imageView->Render(frameId);
+		return D3D11ImageView->Render(frameId);
 	}
 
 	return false;
 }
 
-void ImageView_Impl::InvalidateFrame()
+void D3D11ImageView_Impl::InvalidateFrame()
 {
 	m_isDirty = true;
 

@@ -1,6 +1,6 @@
 #include "pch.h"
-#include "ImageView.h"
-#include "ImageView_Impl.h"
+#include "D3D11ImageView.h"
+#include "D3D11ImageView_Impl.h"
 
 using namespace Core::ShapeType;
 
@@ -35,12 +35,12 @@ using namespace Core::ShapeType;
 
 #include "../Overlay Renderer/OverlayTypes.h"
 
-ImageView::ImageView()
-	: m_impl(new ImageView_Impl)
+D3D11ImageView::D3D11ImageView()
+	: m_impl(new D3D11ImageView_Impl)
 {
 }
 
-ImageView::~ImageView()
+D3D11ImageView::~D3D11ImageView()
 {
 	if (m_impl)
 	{
@@ -49,7 +49,7 @@ ImageView::~ImageView()
 	}
 }
 
-bool ImageView::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
+bool D3D11ImageView::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 {
 	if (!m_impl->GetHWND())
 	{
@@ -60,7 +60,7 @@ bool ImageView::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
 	return true;
 }
 
-HWND ImageView::GetHWND() const
+HWND D3D11ImageView::GetHWND() const
 {
 	if (m_impl && m_impl->GetHWND())
 	{
@@ -70,7 +70,7 @@ HWND ImageView::GetHWND() const
 	return nullptr;
 }
 
-ID3D11Device* ImageView::GetDevice() const
+ID3D11Device* D3D11ImageView::GetDevice() const
 {
 	if (m_impl)
 	{
@@ -80,7 +80,7 @@ ID3D11Device* ImageView::GetDevice() const
 	return nullptr;
 }
 
-ID3D11DeviceContext* ImageView::GetDeviceContext() const
+ID3D11DeviceContext* D3D11ImageView::GetDeviceContext() const
 {
 	if (m_impl)
 	{
@@ -90,7 +90,7 @@ ID3D11DeviceContext* ImageView::GetDeviceContext() const
 	return nullptr;
 }
 
-void ImageView::RenderLock()
+void D3D11ImageView::RenderLock()
 {
 	if (m_impl)
 	{
@@ -98,7 +98,7 @@ void ImageView::RenderLock()
 	}
 }
 
-void ImageView::RenderUnLock()
+void D3D11ImageView::RenderUnLock()
 {
 	if (m_impl)
 	{
@@ -106,7 +106,7 @@ void ImageView::RenderUnLock()
 	}
 }
 
-void ImageView::InvalidateFrame()
+void D3D11ImageView::InvalidateFrame()
 {
 	if (m_impl)
 	{
@@ -114,7 +114,7 @@ void ImageView::InvalidateFrame()
 	}
 }
 
-void ImageView::ImageOverlayClear()
+void D3D11ImageView::ImageOverlayClear()
 {
 	if (m_impl)
 	{
@@ -122,7 +122,7 @@ void ImageView::ImageOverlayClear()
 	}
 }
 
-void ImageView::ImageOverlayShow(bool show)
+void D3D11ImageView::ImageOverlayShow(bool show)
 {
 	if (m_impl)
 	{
@@ -130,7 +130,7 @@ void ImageView::ImageOverlayShow(bool show)
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Point2i* points, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Point2i* points, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -138,7 +138,7 @@ void ImageView::ImageOverlayAdd(const Point2i* points, size_t count, const Overl
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Point2f* points, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Point2f* points, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -146,7 +146,7 @@ void ImageView::ImageOverlayAdd(const Point2f* points, size_t count, const Overl
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Point2d* points, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Point2d* points, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -154,7 +154,7 @@ void ImageView::ImageOverlayAdd(const Point2d* points, size_t count, const Overl
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Line2i* lines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Line2i* lines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -162,7 +162,7 @@ void ImageView::ImageOverlayAdd(const Line2i* lines, size_t count, const Overlay
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Line2f* lines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Line2f* lines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -170,7 +170,7 @@ void ImageView::ImageOverlayAdd(const Line2f* lines, size_t count, const Overlay
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Line2d* lines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Line2d* lines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -178,7 +178,7 @@ void ImageView::ImageOverlayAdd(const Line2d* lines, size_t count, const Overlay
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Rect2i* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Rect2i* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -186,7 +186,7 @@ void ImageView::ImageOverlayAdd(const Rect2i* rectangles, size_t count, const Ov
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Rect2f* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Rect2f* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -194,7 +194,7 @@ void ImageView::ImageOverlayAdd(const Rect2f* rectangles, size_t count, const Ov
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Rect2d* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Rect2d* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -202,7 +202,7 @@ void ImageView::ImageOverlayAdd(const Rect2d* rectangles, size_t count, const Ov
 	}
 }
 
-void ImageView::ImageOverlayAdd(const QuadRect2i* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const QuadRect2i* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -210,7 +210,7 @@ void ImageView::ImageOverlayAdd(const QuadRect2i* rectangles, size_t count, cons
 	}
 }
 
-void ImageView::ImageOverlayAdd(const QuadRect2f* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const QuadRect2f* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -218,7 +218,7 @@ void ImageView::ImageOverlayAdd(const QuadRect2f* rectangles, size_t count, cons
 	}
 }
 
-void ImageView::ImageOverlayAdd(const QuadRect2d* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const QuadRect2d* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -226,7 +226,7 @@ void ImageView::ImageOverlayAdd(const QuadRect2d* rectangles, size_t count, cons
 	}
 }
 
-void ImageView::ImageOverlayAdd(const RotatedRect2i* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const RotatedRect2i* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -234,7 +234,7 @@ void ImageView::ImageOverlayAdd(const RotatedRect2i* rectangles, size_t count, c
 	}
 }
 
-void ImageView::ImageOverlayAdd(const RotatedRect2f* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const RotatedRect2f* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -242,7 +242,7 @@ void ImageView::ImageOverlayAdd(const RotatedRect2f* rectangles, size_t count, c
 	}
 }
 
-void ImageView::ImageOverlayAdd(const RotatedRect2d* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const RotatedRect2d* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -250,7 +250,7 @@ void ImageView::ImageOverlayAdd(const RotatedRect2d* rectangles, size_t count, c
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Circle2f* circles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Circle2f* circles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -258,7 +258,7 @@ void ImageView::ImageOverlayAdd(const Circle2f* circles, size_t count, const Ove
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Circle2d* circles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Circle2d* circles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -266,7 +266,7 @@ void ImageView::ImageOverlayAdd(const Circle2d* circles, size_t count, const Ove
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Ellipse2f* ellipses, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Ellipse2f* ellipses, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -274,7 +274,7 @@ void ImageView::ImageOverlayAdd(const Ellipse2f* ellipses, size_t count, const O
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Ellipse2d* ellipses, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Ellipse2d* ellipses, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -282,7 +282,7 @@ void ImageView::ImageOverlayAdd(const Ellipse2d* ellipses, size_t count, const O
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Polyline2f* polylines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Polyline2f* polylines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -290,7 +290,7 @@ void ImageView::ImageOverlayAdd(const Polyline2f* polylines, size_t count, const
 	}
 }
 
-void ImageView::ImageOverlayAdd(const Polygon2f* polygons, size_t count, const OverlayStyle& style)
+void D3D11ImageView::ImageOverlayAdd(const Polygon2f* polygons, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -298,7 +298,7 @@ void ImageView::ImageOverlayAdd(const Polygon2f* polygons, size_t count, const O
 	}
 }
 
-void ImageView::WindowOverlayClear()
+void D3D11ImageView::WindowOverlayClear()
 {
 	if (m_impl)
 	{
@@ -306,7 +306,7 @@ void ImageView::WindowOverlayClear()
 	}
 }
 
-void ImageView::WindowOverlayShow(bool show)
+void D3D11ImageView::WindowOverlayShow(bool show)
 {
 	if (m_impl)
 	{
@@ -314,7 +314,7 @@ void ImageView::WindowOverlayShow(bool show)
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Point2i* points, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Point2i* points, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -322,7 +322,7 @@ void ImageView::WindowOverlayAdd(const Point2i* points, size_t count, const Over
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Point2f* points, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Point2f* points, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -330,7 +330,7 @@ void ImageView::WindowOverlayAdd(const Point2f* points, size_t count, const Over
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Point2d* points, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Point2d* points, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -338,7 +338,7 @@ void ImageView::WindowOverlayAdd(const Point2d* points, size_t count, const Over
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Line2i* lines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Line2i* lines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -346,7 +346,7 @@ void ImageView::WindowOverlayAdd(const Line2i* lines, size_t count, const Overla
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Line2f* lines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Line2f* lines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -354,7 +354,7 @@ void ImageView::WindowOverlayAdd(const Line2f* lines, size_t count, const Overla
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Line2d* lines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Line2d* lines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -362,7 +362,7 @@ void ImageView::WindowOverlayAdd(const Line2d* lines, size_t count, const Overla
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Rect2i* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Rect2i* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -370,7 +370,7 @@ void ImageView::WindowOverlayAdd(const Rect2i* rectangles, size_t count, const O
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Rect2f* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Rect2f* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -378,7 +378,7 @@ void ImageView::WindowOverlayAdd(const Rect2f* rectangles, size_t count, const O
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Rect2d* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Rect2d* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -386,7 +386,7 @@ void ImageView::WindowOverlayAdd(const Rect2d* rectangles, size_t count, const O
 	}
 }
 
-void ImageView::WindowOverlayAdd(const QuadRect2i* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const QuadRect2i* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -394,7 +394,7 @@ void ImageView::WindowOverlayAdd(const QuadRect2i* rectangles, size_t count, con
 	}
 }
 
-void ImageView::WindowOverlayAdd(const QuadRect2f* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const QuadRect2f* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -402,7 +402,7 @@ void ImageView::WindowOverlayAdd(const QuadRect2f* rectangles, size_t count, con
 	}
 }
 
-void ImageView::WindowOverlayAdd(const QuadRect2d* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const QuadRect2d* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -410,7 +410,7 @@ void ImageView::WindowOverlayAdd(const QuadRect2d* rectangles, size_t count, con
 	}
 }
 
-void ImageView::WindowOverlayAdd(const RotatedRect2i* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const RotatedRect2i* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -418,7 +418,7 @@ void ImageView::WindowOverlayAdd(const RotatedRect2i* rectangles, size_t count, 
 	}
 }
 
-void ImageView::WindowOverlayAdd(const RotatedRect2f* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const RotatedRect2f* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -426,7 +426,7 @@ void ImageView::WindowOverlayAdd(const RotatedRect2f* rectangles, size_t count, 
 	}
 }
 
-void ImageView::WindowOverlayAdd(const RotatedRect2d* rectangles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const RotatedRect2d* rectangles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -434,7 +434,7 @@ void ImageView::WindowOverlayAdd(const RotatedRect2d* rectangles, size_t count, 
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Circle2f* circles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Circle2f* circles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -442,7 +442,7 @@ void ImageView::WindowOverlayAdd(const Circle2f* circles, size_t count, const Ov
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Circle2d* circles, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Circle2d* circles, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -450,7 +450,7 @@ void ImageView::WindowOverlayAdd(const Circle2d* circles, size_t count, const Ov
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Ellipse2f* ellipses, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Ellipse2f* ellipses, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -458,7 +458,7 @@ void ImageView::WindowOverlayAdd(const Ellipse2f* ellipses, size_t count, const 
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Ellipse2d* ellipses, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Ellipse2d* ellipses, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -466,7 +466,7 @@ void ImageView::WindowOverlayAdd(const Ellipse2d* ellipses, size_t count, const 
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Polyline2f* polylines, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Polyline2f* polylines, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -474,7 +474,7 @@ void ImageView::WindowOverlayAdd(const Polyline2f* polylines, size_t count, cons
 	}
 }
 
-void ImageView::WindowOverlayAdd(const Polygon2f* polygons, size_t count, const OverlayStyle& style)
+void D3D11ImageView::WindowOverlayAdd(const Polygon2f* polygons, size_t count, const OverlayStyle& style)
 {
 	if (m_impl)
 	{
@@ -482,7 +482,7 @@ void ImageView::WindowOverlayAdd(const Polygon2f* polygons, size_t count, const 
 	}
 }
 
-bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (m_impl)
 	{
@@ -492,7 +492,7 @@ bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& re
 	return false;
 }
 
-bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (m_impl)
 	{
@@ -502,7 +502,7 @@ bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f&
 	return false;
 }
 
-bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (m_impl)
 	{
@@ -512,7 +512,7 @@ bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& 
 	return false;
 }
 
-bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (m_impl)
 	{
@@ -522,7 +522,7 @@ bool ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f&
 	return false;
 }
 
-void ImageView::ROIClear()
+void D3D11ImageView::ROIClear()
 {
 	if (m_impl)
 	{
@@ -530,7 +530,7 @@ void ImageView::ROIClear()
 	}
 }
 
-bool ImageView::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
+bool D3D11ImageView::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
 {
 	if (m_impl)
 	{
@@ -542,7 +542,7 @@ bool ImageView::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height
 	}
 }
 
-bool ImageView::UpdateSharedTexture(HANDLE sharedHandle)
+bool D3D11ImageView::UpdateSharedTexture(HANDLE sharedHandle)
 {
 	if (m_impl)
 	{

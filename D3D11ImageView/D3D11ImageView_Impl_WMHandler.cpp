@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "ImageView_Impl.h"
+#include "D3D11ImageView_Impl.h"
 
 #include <windowsx.h>
 
@@ -21,7 +21,7 @@
 using namespace Core::ShapeType;
 
 // WM_ENTERSIZEMOVE / WM_EXITSIZEMOVE 최적화
-LRESULT ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
@@ -46,7 +46,7 @@ LRESULT ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 	return __super::WndProc(message, wParam, lParam);
 }
 
-LRESULT ImageView_Impl::OnCommand(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnCommand(WPARAM wParam, LPARAM lParam)
 {
 	DWORD commandId = LOWORD(wParam);
 	DWORD commandEvent = HIWORD(wParam);
@@ -58,25 +58,25 @@ LRESULT ImageView_Impl::OnCommand(WPARAM wParam, LPARAM lParam)
 	return 1L;
 }
 
-LRESULT ImageView_Impl::OnCreate(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnCreate(WPARAM wParam, LPARAM lParam)
 {
 
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnDestroy(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnDestroy(WPARAM wParam, LPARAM lParam)
 {
 	Finalize();
 
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnEraseBkgnd(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnEraseBkgnd(WPARAM wParam, LPARAM lParam)
 {
 	return TRUE;
 }
 
-LRESULT ImageView_Impl::OnLButtonDblClk(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnLButtonDblClk(WPARAM wParam, LPARAM lParam)
 {
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
@@ -112,7 +112,7 @@ LRESULT ImageView_Impl::OnLButtonDblClk(WPARAM wParam, LPARAM lParam)
 	return 1L;
 }
 
-LRESULT ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 {
 	// Client 좌표계
 
@@ -154,7 +154,7 @@ LRESULT ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
 {
 	// Client 좌표계
 
@@ -195,7 +195,7 @@ LRESULT ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 {
 	// Client 좌표계
 
@@ -248,7 +248,7 @@ LRESULT ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnMouseWheel(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnMouseWheel(WPARAM wParam, LPARAM lParam)
 {
 	// Screen 좌표계
 	// 사용자 체감이 더욱 정확하게 하기 위해 MouseWheel 은 GetCursorPos 사용
@@ -274,7 +274,7 @@ LRESULT ImageView_Impl::OnMouseWheel(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnNcDestroy(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnNcDestroy(WPARAM wParam, LPARAM lParam)
 {
 	::SetWindowLongPtr(m_hWnd, GWLP_USERDATA, 0);
 	m_hWnd = nullptr;
@@ -282,7 +282,7 @@ LRESULT ImageView_Impl::OnNcDestroy(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnPaint(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnPaint(WPARAM wParam, LPARAM lParam)
 {
 	PAINTSTRUCT ps = {};
 
@@ -295,7 +295,7 @@ LRESULT ImageView_Impl::OnPaint(WPARAM wParam, LPARAM lParam)
 	return 1L;
 }
 
-LRESULT ImageView_Impl::OnRButtonDown(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnRButtonDown(WPARAM wParam, LPARAM lParam)
 {
 	// Client 좌표계
 
@@ -320,7 +320,7 @@ LRESULT ImageView_Impl::OnRButtonDown(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnRButtonUp(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnRButtonUp(WPARAM wParam, LPARAM lParam)
 {
 	// Client 좌표계
 
@@ -351,12 +351,12 @@ LRESULT ImageView_Impl::OnRButtonUp(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-LRESULT ImageView_Impl::OnSetCursor(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnSetCursor(WPARAM wParam, LPARAM lParam)
 {
 	return LRESULT();
 }
 
-LRESULT ImageView_Impl::OnSize(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnSize(WPARAM wParam, LPARAM lParam)
 {
 	if (wParam == SIZE_MINIMIZED)
 		return 0L;
@@ -373,7 +373,7 @@ LRESULT ImageView_Impl::OnSize(WPARAM wParam, LPARAM lParam)
 	return 1L;
 }
 
-LRESULT ImageView_Impl::OnTimer(WPARAM wParam, LPARAM lParam)
+LRESULT D3D11ImageView_Impl::OnTimer(WPARAM wParam, LPARAM lParam)
 {
 	return 0L;
 }

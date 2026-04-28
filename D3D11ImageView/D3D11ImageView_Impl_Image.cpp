@@ -1,12 +1,12 @@
 #include "pch.h"
-#include "ImageView_Impl.h"
+#include "D3D11ImageView_Impl.h"
 #include "../Render Layer/ImageRenderLayer.h"
 #include "../Render Layer/UIRenderLayer.h"
 
 using namespace Core::ShapeType;
 using namespace Core::ImageType;
 
-bool ImageView_Impl::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
+bool D3D11ImageView_Impl::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
 {
 	if (!m_imageLayer || !data || width == 0 || height == 0 || stride == 0)
 		return false;
@@ -14,7 +14,7 @@ bool ImageView_Impl::UpdateImage(const uint8_t* data, uint32_t width, uint32_t h
 	return QueueImageUpdate(data, width, height, stride, channel);
 }
 
-bool ImageView_Impl::UpdateSharedTexture(HANDLE sharedHandle)
+bool D3D11ImageView_Impl::UpdateSharedTexture(HANDLE sharedHandle)
 {
 	if (!m_imageLayer)
 		return false;
@@ -22,7 +22,7 @@ bool ImageView_Impl::UpdateSharedTexture(HANDLE sharedHandle)
 	return QueueSharedTextureUpdate(sharedHandle);
 }
 
-bool ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
+bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
 {
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	m_pendingImageUpdate.Reset();
@@ -40,7 +40,7 @@ bool ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, uint3
 	return true;
 }
 
-bool ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
+bool D3D11ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 {
 	if (!sharedHandle)
 		return false;
@@ -57,7 +57,7 @@ bool ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 	return true;
 }
 
-bool ImageView_Impl::ApplyPendingImageUpdate()
+bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 {
 	if (!m_imageLayer || !m_hasPendingImageUpdate.exchange(false))
 		return true;

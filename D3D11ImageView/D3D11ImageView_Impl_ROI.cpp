@@ -1,11 +1,11 @@
 #include "pch.h"
-#include "ImageView_Impl.h"
+#include "D3D11ImageView_Impl.h"
 
 #include "../Render Layer/ROIRenderLayer.h"
 
 using namespace Core::ShapeType;
 
-bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -21,7 +21,7 @@ bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Rect2
 	return result;
 }
 
-bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -37,7 +37,7 @@ bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Ellip
 	return result;
 }
 
-bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -53,7 +53,7 @@ bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Circl
 	return result;
 }
 
-bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -69,7 +69,7 @@ bool ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Polyg
 	return result;
 }
 
-void ImageView_Impl::ROIClear()
+void D3D11ImageView_Impl::ROIClear()
 {
 	if (!m_roiLayer)
 	{

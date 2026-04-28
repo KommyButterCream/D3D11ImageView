@@ -37,12 +37,12 @@
     <ClCompile Include="..\ROI Renderer\ROIPolygonRenderer.cpp" />
     <ClCompile Include="..\ROI Renderer\ROIRectangleRenderer.cpp" />
     <ClCompile Include="HighResolutionTimer.cpp" />
-    <ClCompile Include="ImageView.cpp" />
-    <ClCompile Include="ImageView_Impl.cpp" />
-    <ClCompile Include="ImageView_Impl_Image.cpp" />
-    <ClCompile Include="ImageView_Impl_Overlay.cpp" />
-    <ClCompile Include="ImageView_Impl_ROI.cpp" />
-    <ClCompile Include="ImageView_Impl_WMHandler.cpp" />
+    <ClCompile Include="D3D11ImageView.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl_Image.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl_Overlay.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl_ROI.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl_WMHandler.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
@@ -75,8 +75,8 @@
     <ClInclude Include="..\ROI Renderer\ROIRenderContext.h" />
     <ClInclude Include="..\ROI Renderer\ROIUtilities.h" />
     <ClInclude Include="HighResolutionTimer.h" />
-    <ClInclude Include="ImageView.h" />
-    <ClInclude Include="ImageView_Impl.h" />
+    <ClInclude Include="D3D11ImageView.h" />
+    <ClInclude Include="D3D11ImageView_Impl.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="RenderThread.h" />
   </ItemGroup>

@@ -256,7 +256,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomInButton->SetCornerRadius(4.f);
 		m_zoomInButton->SetCommand(UICommand::ZoomIn);
 		m_zoomInButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomInButton->SetIcon(L"../icons/icon_zoom_in.svg");
+		m_zoomInButton->SetIcon(L"../Icons/icon_zoom_in.svg");
 		m_zoomInButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomInButton);
@@ -271,7 +271,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomOutButton->SetCornerRadius(4.f);
 		m_zoomOutButton->SetCommand(UICommand::ZoomOut);
 		m_zoomOutButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomOutButton->SetIcon(L"../icons/icon_zoom_out.svg");
+		m_zoomOutButton->SetIcon(L"../Icons/icon_zoom_out.svg");
 		m_zoomOutButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomOutButton);
@@ -286,7 +286,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoom1To1Button->SetCornerRadius(4.f);
 		m_zoom1To1Button->SetCommand(UICommand::Zoom1to1);
 		m_zoom1To1Button->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoom1To1Button->SetIcon(L"../icons/icon_zoom_1on1.svg");
+		m_zoom1To1Button->SetIcon(L"../Icons/icon_zoom_1on1.svg");
 		m_zoom1To1Button->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoom1To1Button);
@@ -301,7 +301,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomFitButton->SetCornerRadius(4.f);
 		m_zoomFitButton->SetCommand(UICommand::ZoomFit);
 		m_zoomFitButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomFitButton->SetIcon(L"../icons/icon_zoom_fit_image.svg");
+		m_zoomFitButton->SetIcon(L"../Icons/icon_zoom_fit_image.svg");
 		m_zoomFitButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomFitButton);
@@ -413,7 +413,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomInContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoomInContextMenuButton->SetCommand(UICommand::ZoomIn);
 		m_zoomInContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomInContextMenuButton->SetIcon(L"../icons/icon_zoom_in.svg");
+		m_zoomInContextMenuButton->SetIcon(L"../Icons/icon_zoom_in.svg");
 		m_zoomInContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomInContextMenuButton->SetText(L"Zoom In");
 		m_zoomInContextMenuButton->SetExtraText(L"Ctrl +");
@@ -433,7 +433,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomOutContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoomOutContextMenuButton->SetCommand(UICommand::ZoomOut);
 		m_zoomOutContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomOutContextMenuButton->SetIcon(L"../icons/icon_zoom_out.svg");
+		m_zoomOutContextMenuButton->SetIcon(L"../Icons/icon_zoom_out.svg");
 		m_zoomOutContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomOutContextMenuButton->SetText(L"Zoom Out");
 		m_zoomOutContextMenuButton->SetExtraText(L"Ctrl -");
@@ -454,7 +454,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoom1To1ContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoom1To1ContextMenuButton->SetCommand(UICommand::Zoom1to1);
 		m_zoom1To1ContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoom1To1ContextMenuButton->SetIcon(L"../icons/icon_zoom_1on1.svg");
+		m_zoom1To1ContextMenuButton->SetIcon(L"../Icons/icon_zoom_1on1.svg");
 		m_zoom1To1ContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoom1To1ContextMenuButton->SetText(L"Zoom 1:1");
 		m_zoom1To1ContextMenuButton->SetExtraText(L"Ctrl 1");
@@ -475,7 +475,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomFitContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoomFitContextMenuButton->SetCommand(UICommand::ZoomFit);
 		m_zoomFitContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomFitContextMenuButton->SetIcon(L"../icons/icon_zoom_fit_image.svg");
+		m_zoomFitContextMenuButton->SetIcon(L"../Icons/icon_zoom_fit_image.svg");
 		m_zoomFitContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomFitContextMenuButton->SetText(L"Zoom Fit");
 		m_zoomFitContextMenuButton->SetExtraText(L"");
@@ -505,7 +505,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_imageCenterLineContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_imageCenterLineContextMenuButton->SetCommand(UICommand::ImageCenterCrossLine);
 		m_imageCenterLineContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_imageCenterLineContextMenuButton->SetIcon(L"../icons/icon_check.svg");
+		m_imageCenterLineContextMenuButton->SetIcon(L"../Icons/icon_check.svg");
 		m_imageCenterLineContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_imageCenterLineContextMenuButton->SetText(L"Show image center line");
 		m_imageCenterLineContextMenuButton->SetExtraText(L"");
@@ -629,7 +629,7 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 		m_coordinateLabel->SetTextStyle(statusLabelTextDefaultStyle);
 		m_coordinateLabel->SetIconAreaWidth(iconWidth);
 		m_coordinateLabel->SetTextAreaWidth(textWidth);
-		m_coordinateLabel->SetIcon(L"../icons/icon_arrow.svg");
+		m_coordinateLabel->SetIcon(L"../Icons/icon_arrow.svg");
 		m_coordinateLabel->SetIconScale(0.6f);
 		m_coordinateLabel->SetIconStyle(statusLabelIconDefaultStyle);
 
@@ -664,7 +664,7 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 		m_colorLabel->SetTextStyle(statusLabelTextDefaultStyle);
 		m_colorLabel->SetIconAreaWidth(iconWidth);
 		m_colorLabel->SetTextAreaWidth(textWidth);
-		m_colorLabel->SetIcon(L"../icons/icon_color.svg");
+		m_colorLabel->SetIcon(L"../Icons/icon_color.svg");
 		m_colorLabel->SetIconScale(0.6f);
 		m_colorLabel->SetIconStyle(statusLabelIconDefaultStyle);
 
@@ -725,7 +725,7 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 		m_imageSizeLabel->SetTextStyle(statusLabelTextDefaultStyle);
 		m_imageSizeLabel->SetIconAreaWidth(iconWidth);
 		m_imageSizeLabel->SetTextAreaWidth(textWidth);
-		m_imageSizeLabel->SetIcon(L"../icons/icon_imagesize.svg");
+		m_imageSizeLabel->SetIcon(L"../Icons/icon_imagesize.svg");
 		m_imageSizeLabel->SetIconScale(0.6f);
 		m_imageSizeLabel->SetIconStyle(statusLabelIconDefaultStyle);
 

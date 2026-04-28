@@ -80,22 +80,22 @@
     <ClCompile Include="HighResolutionTimer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ImageView.cpp">
+    <ClCompile Include="D3D11ImageView.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ImageView_Impl.cpp">
+    <ClCompile Include="D3D11ImageView_Impl.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ImageView_Impl_Image.cpp">
+    <ClCompile Include="D3D11ImageView_Impl_Image.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ImageView_Impl_Overlay.cpp">
+    <ClCompile Include="D3D11ImageView_Impl_Overlay.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ImageView_Impl_ROI.cpp">
+    <ClCompile Include="D3D11ImageView_Impl_ROI.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ImageView_Impl_WMHandler.cpp">
+    <ClCompile Include="D3D11ImageView_Impl_WMHandler.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="RenderThread.cpp">
@@ -181,10 +181,10 @@
     <ClInclude Include="HighResolutionTimer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="ImageView.h">
+    <ClInclude Include="D3D11ImageView.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="ImageView_Impl.h">
+    <ClInclude Include="D3D11ImageView_Impl.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="RenderThread.h">
