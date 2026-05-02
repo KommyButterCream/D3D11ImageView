@@ -6,6 +6,11 @@
 #define D3D11_IMAGE_VIEW_API __declspec(dllimport)
 #endif
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
 #include <stdint.h>
 
 #include "../../../Module/Core/ShapeType/Point2i.h"
@@ -55,6 +60,7 @@ using Core::ShapeType::RotatedRect2i;
 struct OverlayStyle;
 struct ID3D11Device;
 struct ID3D11DeviceContext;
+struct ID3D11Texture2D;
 class D3D11RenderEngine;
 
 class D3D11ImageView_Impl;
