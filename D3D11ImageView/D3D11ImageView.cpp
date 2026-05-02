@@ -49,11 +49,16 @@ D3D11ImageView::~D3D11ImageView()
 	}
 }
 
-bool D3D11ImageView::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
+bool D3D11ImageView::Initialize(HWND hWndParent, const RECT& rect, DWORD style, D3D11RenderEngine* D3D11Engine)
+{
+	return Initialize(D3D11Engine, hWndParent, rect, style);
+}
+
+bool D3D11ImageView::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndParent, const RECT& rect, DWORD style)
 {
 	if (!m_impl->GetHWND())
 	{
-		if (!m_impl->Initialize(hWndParent, rect, style))
+		if (!m_impl->Initialize(D3D11Engine, hWndParent, rect, style))
 			return false;
 	}
 
@@ -542,6 +547,18 @@ bool D3D11ImageView::UpdateImage(const uint8_t* data, uint32_t width, uint32_t h
 	}
 }
 
+bool D3D11ImageView::UpdateTexture(ID3D11Texture2D* texture)
+{
+	if (m_impl)
+	{
+		return m_impl->UpdateTexture(texture);
+	}
+	else
+	{
+		return false;
+	}
+}
+
 bool D3D11ImageView::UpdateSharedTexture(HANDLE sharedHandle)
 {
 	if (m_impl)
@@ -553,9 +570,3 @@ bool D3D11ImageView::UpdateSharedTexture(HANDLE sharedHandle)
 		return false;
 	}
 }
-
-
-
-
-
-

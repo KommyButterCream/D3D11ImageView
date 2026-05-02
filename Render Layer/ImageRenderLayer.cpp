@@ -258,6 +258,47 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 	return true;
 }
 
+bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height)
+{
+	if (!texture)
+		return false;
+
+	D3D11_TEXTURE2D_DESC desc = {};
+	texture->GetDesc(&desc);
+
+	if (desc.Width == 0 || desc.Height == 0 || desc.Width > 8192 || desc.Height > 8192)
+		return false;
+
+	ID3D11Device* sourceDevice = nullptr;
+	texture->GetDevice(&sourceDevice);
+	const bool sameDevice = (sourceDevice == m_device);
+	SafeRelease(sourceDevice);
+	if (!sameDevice)
+		return false;
+
+	m_currentMode = RenderMode::Single;
+	m_texWidth = width = desc.Width;
+	m_texHeight = height = desc.Height;
+
+	if (!CreateSingleBuffer(width, height))
+		return false;
+
+	m_contextD3D->CopyResource(m_singleTexture, texture);
+
+	if (m_image)
+	{
+		m_image->ReleaseBuffer();
+	}
+
+	if (m_camera)
+	{
+		m_camera->SetImageSize(width, height);
+		m_camera->FitInstant();
+	}
+
+	return true;
+}
+
 bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height)
 {
 	if (!sharedHandle) return false;

@@ -53,7 +53,12 @@ D3D11ImageView_Impl::~D3D11ImageView_Impl()
 	}
 }
 
-bool D3D11ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style)
+bool D3D11ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD style, D3D11RenderEngine* D3D11Engine)
+{
+	return Initialize(D3D11Engine, hWndParent, rect, style);
+}
+
+bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndParent, const RECT& rect, DWORD style)
 {
 	m_isFinalized = false;
 
@@ -125,12 +130,24 @@ bool D3D11ImageView_Impl::Initialize(HWND hWndParent, const RECT& rect, DWORD st
 #endif
 	renderEngineConfig.initFontManager = true;
 
-	m_renderEngine = std::make_unique<D3D11RenderEngine>();
-	if (!m_renderEngine->Initialize(renderEngineConfig))
-		return failInitialize();
+	if (D3D11Engine)
+	{
+		m_renderEngine = D3D11Engine;
+		m_ownsRenderEngine = false;
+	}
+	else
+	{
+		m_renderEngine = new D3D11RenderEngine();
+		if (!m_renderEngine)
+			return failInitialize();
+		m_ownsRenderEngine = true;
+
+		if (!m_renderEngine->Initialize(renderEngineConfig))
+			return failInitialize();
+	}
 
 	// Rendering Context
-	m_renderContext = std::make_unique<D3D11RenderContext>(m_renderEngine.get());
+	m_renderContext = std::make_unique<D3D11RenderContext>(m_renderEngine);
 	if (!m_renderContext->Initialize(m_hWnd))
 		return failInitialize();
 
@@ -220,6 +237,15 @@ void D3D11ImageView_Impl::Finalize()
 	if (m_renderThread)
 		m_renderThread->StopThread();
 
+	::AcquireSRWLockExclusive(&m_pendingImageLock);
+	if (m_pendingImageUpdate.texture)
+	{
+		m_pendingImageUpdate.texture->Release();
+	}
+	m_pendingImageUpdate.Reset();
+	m_hasPendingImageUpdate = false;
+	::ReleaseSRWLockExclusive(&m_pendingImageLock);
+
 	// 1. ??됱뵠??? RenderContext?癒?퐣 ?브쑬??
 	if (m_renderContext)
 	{
@@ -254,11 +280,13 @@ void D3D11ImageView_Impl::Finalize()
 	}
 
 	// 4. RenderEngine ?ル굝利?
-	if (m_renderEngine)
+	if (m_ownsRenderEngine && m_renderEngine)
 	{
 		m_renderEngine->Shutdown(); // ??덈뼄筌?
-		m_renderEngine.reset();
+		delete m_renderEngine;
 	}
+	m_renderEngine = nullptr;
+	m_ownsRenderEngine = false;
 
 	// 5. Camera ??곸젫
 	if (m_camera)

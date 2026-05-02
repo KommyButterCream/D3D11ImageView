@@ -72,6 +72,7 @@ class UIEventDispatcher;
 struct OverlayStyle;
 class RenderThread;
 class TileManager;
+struct ID3D11Texture2D;
 
 enum class UICommand;
 enum class UIMouseEventType : uint8_t;
@@ -83,6 +84,7 @@ enum class PendingImageUpdateType : uint8_t
 {
 	None,
 	RawImage,
+	Texture,
 	SharedTexture
 };
 
@@ -94,6 +96,7 @@ struct PendingImageUpdate
 	uint32_t height = 0;
 	uint32_t stride = 0;
 	uint32_t channel = 0;
+	ID3D11Texture2D* texture = nullptr;
 	HANDLE sharedHandle = nullptr;
 
 	void Reset()
@@ -104,6 +107,7 @@ struct PendingImageUpdate
 		height = 0;
 		stride = 0;
 		channel = 0;
+		texture = nullptr;
 		sharedHandle = nullptr;
 	}
 };
@@ -115,7 +119,8 @@ public:
 	~D3D11ImageView_Impl();
 
 public:
-	bool Initialize(HWND hWndParent, const RECT& rect, DWORD style);
+	bool Initialize(HWND hWndParent, const RECT& rect, DWORD style, D3D11RenderEngine* D3D11Engine = nullptr);
+	bool Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndParent, const RECT& rect, DWORD style);
 	void Finalize();
 
 	HWND GetHWND() const;
@@ -186,6 +191,7 @@ public:
 	void ROIClear();
 
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
 public:
@@ -250,6 +256,7 @@ private:
 	bool GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4]);
 	void UpdateStatusbar(int32_t mouseX, int32_t mouseY);
 	bool QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	bool QueueTextureUpdate(ID3D11Texture2D* texture);
 	bool QueueSharedTextureUpdate(HANDLE sharedHandle);
 	bool ApplyPendingImageUpdate();
 
@@ -275,7 +282,8 @@ private:
 	std::atomic<bool> m_isDirty = { true };
 	std::atomic<bool> m_hasPendingImageUpdate = { false };
 	std::unique_ptr<Camera2D> m_camera = nullptr;
-	std::unique_ptr<D3D11RenderEngine> m_renderEngine = nullptr;
+	D3D11RenderEngine* m_renderEngine = nullptr;
+	bool m_ownsRenderEngine = false;
 	std::unique_ptr<D3D11RenderContext> m_renderContext = nullptr;
 	std::unique_ptr<RenderThread> m_renderThread = nullptr;
 

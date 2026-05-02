@@ -55,6 +55,7 @@ using Core::ShapeType::RotatedRect2i;
 struct OverlayStyle;
 struct ID3D11Device;
 struct ID3D11DeviceContext;
+class D3D11RenderEngine;
 
 class D3D11ImageView_Impl;
 
@@ -69,7 +70,8 @@ public:
 	D3D11ImageView& operator=(D3D11ImageView&&) = delete;
 
 public:
-	bool Initialize(HWND hWndParent, const RECT& rect, DWORD style);
+	bool Initialize(HWND hWndParent, const RECT& rect, DWORD style, D3D11RenderEngine* D3D11Engine = nullptr);
+	bool Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndParent, const RECT& rect, DWORD style);
 
 	HWND GetHWND() const;
 	ID3D11Device* GetDevice() const;
@@ -137,6 +139,7 @@ public:
 	void ROIClear();
 
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
 private:

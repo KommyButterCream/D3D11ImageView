@@ -70,6 +70,7 @@ public:
 	bool IsImageRenderDirty() const;
 
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	bool UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height);
 	bool UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height);
 
 	RenderMode GetRenderMode() const;
