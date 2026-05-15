@@ -122,14 +122,6 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	};
 
 	// Rendering Engine
-	RenderEngineConfig renderEngineConfig;
-	renderEngineConfig.initD2D = true;
-	renderEngineConfig.initD3D = true;
-#if defined(_DEBUG)
-	renderEngineConfig.initDebugLayer = true;
-#endif
-	renderEngineConfig.initFontManager = true;
-
 	if (D3D11Engine)
 	{
 		m_renderEngine = D3D11Engine;
@@ -137,6 +129,14 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	}
 	else
 	{
+		RenderEngineConfig renderEngineConfig;
+		renderEngineConfig.initD2D = true;
+		renderEngineConfig.initD3D = true;
+#if defined(_DEBUG)
+		renderEngineConfig.initDebugLayer = true;
+#endif
+		renderEngineConfig.initFontManager = true;
+
 		m_renderEngine = new D3D11RenderEngine();
 		if (!m_renderEngine)
 			return failInitialize();
