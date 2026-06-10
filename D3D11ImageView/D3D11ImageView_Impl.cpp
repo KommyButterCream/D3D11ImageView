@@ -114,11 +114,11 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	tileSystemDesc.maxLOD = 4;
 	tileSystemDesc.lods =
 	{
-		{512, 2 * 100}, // LOD 0 (?癒?궚, 揶쎛????돦??
+		{512, 2 * 100}, // LOD 0 (highest resolution)
 		{512, 2 * 50},  // LOD 1
 		{512, 2 * 25},  // LOD 2
 		{512, 2 * 15},  // LOD 3
-		{512, 2 * 10},  // LOD 4 (椰꾧퀣???紐껉퐬??
+		{512, 2 * 10},  // LOD 4 (lowest resolution)
 	};
 
 	// Rendering Engine
@@ -246,7 +246,7 @@ void D3D11ImageView_Impl::Finalize()
 	m_hasPendingImageUpdate = false;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
-	// 1. ??됱뵠??? RenderContext?癒?퐣 ?브쑬??
+	// 1. Detach device/resize listeners from RenderContext.
 	if (m_renderContext)
 	{
 		for (IRenderLayer* layer : m_layers)
@@ -262,7 +262,7 @@ void D3D11ImageView_Impl::Finalize()
 		}
 	}
 
-	// 2. ??됱뵠??GPU ?귐딅꺖????곸젫 (engine ??곷툡??됱뱽 ??
+	// 2. Release GPU resources owned by render layers before shutting down the context.
 	m_overlayLayer.reset();
 	m_roiLayer.reset();
 	m_selectionRectLayer.reset();
@@ -272,23 +272,23 @@ void D3D11ImageView_Impl::Finalize()
 
 	m_layers.clear();
 
-	// 3. RenderContext ?ル굝利?(swapchain ??釉?
+	// 3. Shutdown RenderContext and swap chain resources.
 	if (m_renderContext)
 	{
 		m_renderContext->Shutdown();
 		m_renderContext.reset();
 	}
 
-	// 4. RenderEngine ?ル굝利?
+	// 4. Shutdown owned RenderEngine.
 	if (m_ownsRenderEngine && m_renderEngine)
 	{
-		m_renderEngine->Shutdown(); // ??덈뼄筌?
+		m_renderEngine->Shutdown(); // owned engine shutdown
 		delete m_renderEngine;
 	}
 	m_renderEngine = nullptr;
 	m_ownsRenderEngine = false;
 
-	// 5. Camera ??곸젫
+	// 5. Release camera state.
 	if (m_camera)
 	{
 		m_camera.reset();

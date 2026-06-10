@@ -213,9 +213,11 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 	if (!data || width == 0 || height == 0 || stride == 0)
 		return false;
 
+	RenderMode newMode = RenderMode::Single;
+
 	if (width > 8192 || height > 8192)
 	{
-		m_currentMode = RenderMode::Tiled;
+		newMode = RenderMode::Tiled;
 
 		if (m_tileManager)
 		{
@@ -224,8 +226,6 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 	}
 	else
 	{
-		m_currentMode = RenderMode::Single;
-
 		if (!CreateSingleBuffer(width, height))
 			return false;
 
@@ -239,21 +239,14 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 		}
 	}
 
-	// 1. ?ъ씤?곗? 硫뷀??곗씠?곕쭔 ???
-	m_texWidth = width;
-	m_texHeight = height;
-
+	// Update image metadata and buffer ownership.
 	if (m_image)
 	{
 		m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, 8);
 	}
 
-	// 2. 移대찓???ㅼ젙
-	if (m_camera)
-	{
-		m_camera->SetImageSize(width, height);
-		m_camera->FitInstant();
-	}
+	// Update camera state only when the image source or size changes.
+	UpdateImageState(ImageInputSource::RawImage, width, height, newMode, channel);
 
 	return true;
 }
@@ -276,9 +269,8 @@ bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, 
 	if (!sameDevice)
 		return false;
 
-	m_currentMode = RenderMode::Single;
-	m_texWidth = width = desc.Width;
-	m_texHeight = height = desc.Height;
+	width = desc.Width;
+	height = desc.Height;
 
 	if (!CreateSingleBuffer(width, height))
 		return false;
@@ -290,61 +282,67 @@ bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, 
 		m_image->ReleaseBuffer();
 	}
 
-	if (m_camera)
-	{
-		m_camera->SetImageSize(width, height);
-		m_camera->FitInstant();
-	}
+	UpdateImageState(ImageInputSource::Texture, width, height, RenderMode::Single, 0);
 
 	return true;
 }
 
 bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height)
 {
-	if (!sharedHandle) return false;
-
-	if (width > 8192 || height > 8192)
-	{
+	if (!sharedHandle)
 		return false;
-	}
-	else
-	{
-		m_currentMode = RenderMode::Single;
 
-		if (!OpenSharedResource(sharedHandle))
-			return false;
+	if (!OpenSharedResource(sharedHandle))
+		return false;
 
-		D3D11_TEXTURE2D_DESC desc = {};
-		m_sharedTexture->GetDesc(&desc);
+	D3D11_TEXTURE2D_DESC desc = {};
+	m_sharedTexture->GetDesc(&desc);
 
-		m_texWidth = width = desc.Width;
-		m_texHeight = height = desc.Height;
+	if (desc.Width == 0 || desc.Height == 0 || desc.Width > 8192 || desc.Height > 8192)
+		return false;
 
-		if (!CreateSingleBuffer(width, height))
-			return false;
+	width = desc.Width;
+	height = desc.Height;
 
-		m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
-	}
+	if (!CreateSingleBuffer(width, height))
+		return false;
+
+	m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
 
 
-	// 1. ?ъ씤?곗? 硫뷀??곗씠?곕쭔 ???
-	m_texWidth = width;
-	m_texHeight = height;
-
+	// Shared texture updates do not own CPU image memory.
 	if (m_image)
 	{
 		m_image->ReleaseBuffer();
 		//m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, 8);
 	}
 
-	// 2. 移대찓???ㅼ젙
-	if (m_camera)
+	// Update camera state only when the image source or size changes.
+	UpdateImageState(ImageInputSource::SharedTexture, width, height, RenderMode::Single, 0);
+
+	return true;
+}
+
+void ImageRenderLayer::UpdateImageState(ImageInputSource source, uint32_t width, uint32_t height, RenderMode mode, uint32_t channel)
+{
+	const bool needFit =
+		m_inputSource != source ||
+		m_texWidth != width ||
+		m_texHeight != height ||
+		m_currentMode != mode ||
+		(source == ImageInputSource::RawImage && m_inputChannel != channel);
+
+	m_inputSource = source;
+	m_inputChannel = (source == ImageInputSource::RawImage) ? channel : 0;
+	m_currentMode = mode;
+	m_texWidth = width;
+	m_texHeight = height;
+
+	if (m_camera && needFit)
 	{
 		m_camera->SetImageSize(width, height);
 		m_camera->FitInstant();
 	}
-
-	return true;
 }
 
 RenderMode ImageRenderLayer::GetRenderMode() const
@@ -657,7 +655,7 @@ bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height)
 	if (m_singleTexture && m_singleTextureWidth == width && m_singleTextureHeight == height)
 		return true;
 
-	// 湲곗〈 由ъ냼???댁젣
+	// Release existing single-texture resources.
 	SafeRelease(m_singleSRV);
 	SafeRelease(m_singleTexture);
 
@@ -666,9 +664,9 @@ bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height)
 	desc.Height = height;
 	desc.MipLevels = 1;
 	desc.ArraySize = 1;
-	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // 理쒖쥌 異쒕젰??BGRA
+	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // final output format is BGRA
 	desc.SampleDesc.Count = 1;
-	desc.Usage = D3D11_USAGE_DEFAULT; // CPU?먯꽌 GPU濡?蹂듭궗?????ъ슜
+	desc.Usage = D3D11_USAGE_DEFAULT; // GPU resource used as a copy/render target
 	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
 	HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_singleTexture);
@@ -698,23 +696,23 @@ bool ImageRenderLayer::CreateRawUploadBuffer(uint32_t maxByteSize)
 	SafeRelease(m_rawUploadBuffer);
 
 	D3D11_BUFFER_DESC desc = {};
-	desc.ByteWidth = maxByteSize; // 8k x 8k x 3梨꾨꼸 = ??192MB ?댁긽 沅뚯옣
-	desc.Usage = D3D11_USAGE_DYNAMIC; // 留??꾨젅??Map/Unmap???꾪빐 Dynamic
+	desc.ByteWidth = maxByteSize; // enough space for large raw image uploads
+	desc.Usage = D3D11_USAGE_DYNAMIC; // dynamic buffer for Map/Unmap uploads
 	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS; // Raw Access ?덉슜
+	desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS; // allow raw buffer SRV access
 
 	HRESULT hr = m_device->CreateBuffer(&desc, nullptr, &m_rawUploadBuffer);
 	if (FAILED(hr))
 		return false;
 
-	// Shader Resource View (SRV) ?앹꽦
+	// Create shader resource view for raw upload buffer.
 	D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_R32_TYPELESS; // Raw Buffer??Typeless濡??ㅼ젙
+	srvDesc.Format = DXGI_FORMAT_R32_TYPELESS; // raw buffer uses typeless format
 	srvDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
 	srvDesc.BufferEx.FirstElement = 0;
-	srvDesc.BufferEx.NumElements = maxByteSize / 4; // 4諛붿씠???⑥쐞 媛쒖닔
-	srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW; // ?듭떖: RAW ?뚮옒洹?
+	srvDesc.BufferEx.NumElements = maxByteSize / 4; // number of 4-byte elements
+	srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW; // RAW view flag
 
 	hr = m_device->CreateShaderResourceView(m_rawUploadBuffer, &srvDesc, &m_rawUploadSRV);
 
@@ -739,7 +737,7 @@ bool ImageRenderLayer::OpenSharedResource(HANDLE sharedHandle)
 		else
 		{
 			sharedHandle = nullptr;
-			return false; // ?닿린 ?ㅽ뙣 ??以묐떒
+			return false; // opening the shared texture failed
 		}
 	}
 
@@ -754,26 +752,26 @@ bool ImageRenderLayer::CheckViewChanged()
 
 	bool changed = false;
 
-	// 1. ?꾩튂/?ш린 蹂??泥댄겕
+	// 1. Check whether visible image rect changed.
 	if (m_prevViewRect.left != currentRect.left || m_prevViewRect.top != currentRect.top ||
 		m_prevViewRect.right != currentRect.right || m_prevViewRect.bottom != currentRect.bottom)
 	{
 		changed = true;
 	}
 
-	// 2. 以?蹂??泥댄겕 (遺?숈냼?섏젏 ?ㅼ감 怨좊젮)
+	// 2. Check whether zoom changed.
 	if (std::abs(m_prevZoom - currentZoom) > 1e-6f)
 	{
 		changed = true;
 	}
 
-	// 3. ???媛쒖닔 蹂??泥댄겕
+	// 3. Check whether visible tile count changed.
 	if (m_prevTileCount != currentTileCount)
 	{
 		changed = true;
 	}
 
-	// 蹂寃쎈릺?덈떎硫??ㅼ쓬 ?꾨젅?꾩쓣 ?꾪빐 ?곹깭 ?낅뜲?댄듃
+	// Cache current view state for the next frame.
 	if (changed)
 	{
 		m_prevViewRect = currentRect;
@@ -786,7 +784,7 @@ bool ImageRenderLayer::CheckViewChanged()
 
 void ImageRenderLayer::UploadSingleImage_GPU(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
 {
-	// [1] Raw ?곗씠?곕? GPU 踰꾪띁(m_rawUploadBuffer)???낅줈??
+	// [1] Upload raw image data into the GPU raw upload buffer.
 	D3D11_MAPPED_SUBRESOURCE mapped;
 	if (SUCCEEDED(m_contextD3D->Map(m_rawUploadBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
 	{
@@ -798,7 +796,7 @@ void ImageRenderLayer::UploadSingleImage_GPU(const uint8_t* data, uint32_t width
 		}
 		else
 		{
-			// stride瑜?怨좊젮?섏뿬 以??⑥쐞 蹂듭궗 (?대?吏 ??쭔?쇰쭔 蹂듭궗)
+			// Copy line by line when source stride differs from packed width.
 			for (uint32_t y = 0; y < height; ++y)
 			{
 				memcpy(dst + (y * width * channel),
@@ -810,11 +808,11 @@ void ImageRenderLayer::UploadSingleImage_GPU(const uint8_t* data, uint32_t width
 		m_contextD3D->Unmap(m_rawUploadBuffer, 0);
 	}
 
-	// [2] ?곸닔 踰꾪띁 ?ㅼ젙 (蹂?섏슜 ?뚮씪誘명꽣)
+	// [2] Update conversion constants.
 	struct {
 		uint32_t width;
 		uint32_t height;
-		uint32_t stride; // ?ш린?쒕뒗 GPU 踰꾪띁 湲곗??대?濡?width * channel
+		uint32_t stride; // packed GPU buffer stride: width * channel
 		uint32_t channel;
 	} cb;
 	cb.width = width;
@@ -824,16 +822,16 @@ void ImageRenderLayer::UploadSingleImage_GPU(const uint8_t* data, uint32_t width
 
 	m_contextD3D->UpdateSubresource(m_singleConvertCB, 0, nullptr, &cb, 0, 0);
 
-	// [3] CS ?ㅽ뻾
+	// [3] Dispatch compute shader conversion.
 	m_contextD3D->CSSetShader(m_singleTextureCS, nullptr, 0);
 	m_contextD3D->CSSetConstantBuffers(0, 1, &m_singleConvertCB);
 	m_contextD3D->CSSetUnorderedAccessViews(0, 1, &m_singleUAV, nullptr);
 	m_contextD3D->CSSetShaderResources(0, 1, &m_rawUploadSRV);
 
-	// 16x16 洹몃９ ?ㅼ?以꾨쭅
+	// 16x16 thread groups.
 	m_contextD3D->Dispatch((width + 15) / 16, (height + 15) / 16, 1);
 
-	// [4] ?먯썝 ?댁젣 (以묒슂)
+	// [4] Unbind UAV to release the resource hazard.
 	ID3D11UnorderedAccessView* nullUAV = nullptr;
 	m_contextD3D->CSSetUnorderedAccessViews(0, 1, &nullUAV, nullptr);
 }
@@ -879,7 +877,7 @@ bool ImageRenderLayer::RenderTiled()
 		UpdateVertexBuffer(m_renderVertices);
 	}
 
-	// ?뚯씠?꾨씪??諛붿씤??諛?洹몃━湲?
+	// Bind pipeline state and draw tiles.
 	SetCommonShaderStates();
 
 	uint32_t vertexOffset = 0;
@@ -917,7 +915,7 @@ bool ImageRenderLayer::RenderTiled()
 		// Wiare Frame Pixel Shader Constant Buffer(register b1)
 		m_contextD3D->PSSetConstantBuffers(1, 1, &m_wireColorBuffer);
 
-		// SRV 遺덊븘???섎?濡?Unbind
+		// Unbind SRV before wireframe pass.
 		ID3D11ShaderResourceView* nullSRV = nullptr;
 		m_contextD3D->PSSetShaderResources(0, 1, &nullSRV);
 
@@ -938,7 +936,7 @@ bool ImageRenderLayer::RenderSingle()
 		float w = (float)m_texWidth;
 		float h = (float)m_texHeight;
 
-		// ?띿뒪泥??몃뜳?ㅻ뒗 ?섎? ?놁쑝誘濡?0?쇰줈 ?ㅼ젙
+		// Single image quad uses normalized texture coordinates.
 		m_renderVertices.push_back({ {0.f, 0.f, 0.f}, {0.f, 0.f}, 0 });
 		m_renderVertices.push_back({ {w, 0.f, 0.f}, {1.f, 0.f}, 0 });
 		m_renderVertices.push_back({ {w, h, 0.f}, {1.f, 1.f}, 0 });

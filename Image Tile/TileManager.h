@@ -29,23 +29,23 @@ struct TileSystemDesc
 //desc.maxLOD = 4;
 //desc.lods =
 //{
-//	{512, 1024}, // LOD 0 (����, ���� ����)
+//	{512, 1024}, // LOD 0 (highest resolution)
 //	{512, 768},  // LOD 1
 //	{512, 512},  // LOD 2
 //	{512, 256},  // LOD 3
-//	{512, 128},  // LOD 4 (���� �����)
+//	{512, 128},  // LOD 4 (lowest resolution)
 //};
 
 
 struct CachedRegion
 {
-	uint32_t lod = 0xFFFFFFFF; // ���� �ε�� LOD
-	uint32_t startX = 0;       // ���� ���� ���� �ȼ� X
-	uint32_t startY = 0;       // ���� ���� ���� �ȼ� Y
-	uint32_t size = 0;      // 8k ����
+	uint32_t lod = 0xFFFFFFFF; // cached LOD
+	uint32_t startX = 0;       // cached region start pixel X
+	uint32_t startY = 0;       // cached region start pixel Y
+	uint32_t size = 0;         // cached region size
 	bool isValid = false;
 
-	// ���� ��û�� Ÿ���� �� ���� �ȿ� ������ ���ԵǴ��� Ȯ��
+	// Check whether the requested tile area is contained in the cached region.
 	bool Contains(uint32_t targetX, uint32_t targetY, uint32_t targetSize) const
 	{
 		if (!isValid) return false;
@@ -57,9 +57,9 @@ struct CachedRegion
 
 struct TileRenderData
 {
-	Tile* tile = nullptr;        // ����� �ؽ�ó�� �ִ� Ÿ�� (�θ��� ���� ����)
-	TileKey targetKey = {}; // ���� ȭ����� ��ġ ������ �Ǵ� Key
-	float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f; // �ؽ�ó ���ø� ����
+	Tile* tile = nullptr;  // texture tile to render, possibly a fallback parent tile
+	TileKey targetKey = {}; // target screen tile key
+	float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f; // texture sampling coordinates
 };
 
 struct ID3D11Device;
@@ -122,7 +122,7 @@ private:
 	std::vector<uint8_t> m_cpuScratchBuffer;
 	std::vector<TileRenderData> m_renderDataList;
 
-	// GPU ���� ���ε带 ���� ���ҽ�
+	// GPU raw upload cache size.
 	static constexpr uint32_t m_gpuUploadTextureSize = 4096;
 	CachedRegion m_currentGpuCache = {};
 	ID3D11Buffer* m_rawUploadBuffer = nullptr;

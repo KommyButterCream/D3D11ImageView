@@ -38,6 +38,14 @@ enum class RenderMode
 	Tiled
 };
 
+enum class ImageInputSource
+{
+	None,
+	RawImage,
+	Texture,
+	SharedTexture
+};
+
 
 class ImageRenderLayer
 	: public IRenderLayer
@@ -88,6 +96,7 @@ private:
 	bool CreateSingleBuffer(uint32_t width, uint32_t height);
 	bool CreateRawUploadBuffer(uint32_t maxByteSize);
 	bool OpenSharedResource(HANDLE sharedHandle);
+	void UpdateImageState(ImageInputSource source, uint32_t width, uint32_t height, RenderMode mode, uint32_t channel);
 
 	bool CheckViewChanged();
 
@@ -139,6 +148,8 @@ private:
 	uint32_t m_texHeight = 0;
 	DXGI_FORMAT m_texFormat = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
 	bool m_initialized = false;
+	ImageInputSource m_inputSource = ImageInputSource::None;
+	uint32_t m_inputChannel = 0;
 
 	// Camera
 	Camera2D* m_camera = nullptr;
@@ -169,12 +180,3 @@ private:
 	HANDLE m_sharedHandle = nullptr;
 	ID3D11Texture2D* m_sharedTexture = nullptr;
 };
-
-
-
-
-
-
-
-
-

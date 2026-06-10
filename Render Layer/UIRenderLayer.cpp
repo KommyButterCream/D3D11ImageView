@@ -737,8 +737,8 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 
 bool UIRenderLayer::Update(float dt)
 {
-	// Animating ???�한 Rendering ???�요?�면 true
-	// ???�상 Animating ???�요가 ?�어지�?false
+	// Return true while UI animation needs another render pass.
+	// Return false when all animated UI elements are idle.
 	const bool isToolbarPanelBusy = m_toolbarPanel->Update(dt);
 	const bool isContextMenuPanelBusy = m_contextMenuPanel->Update(dt);
 	const bool isStatusPanelBusy = m_statusPanel->Update(dt);
