@@ -6,6 +6,8 @@
 #include "../../../Module/Core/ShapeType/Rect2i.h"
 #include "../../../Module/Core/ImageType/ImageBase.h"
 
+#include "../Image Tile/TileFormat.h"
+
 #include <vector>
 
 
@@ -81,6 +83,10 @@ public:
 	bool UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height);
 	bool UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height);
 
+	// Attach 된 원본 포인터 참조를 끊는다.
+	// 호출자가 그 버퍼를 해제하기 전에 반드시 거쳐야 하는 경로다.
+	void DetachImage();
+
 	RenderMode GetRenderMode() const;
 	const Core::ImageType::ImageBase* GetImage() const;
 private:
@@ -93,7 +99,13 @@ private:
 	bool CreateSampler();
 	bool CreateRasterizerState();
 	bool CreateTileDynamicBuffer(uint32_t maxTileCount);
-	bool CreateSingleBuffer(uint32_t width, uint32_t height);
+	// needsComputeUpload: 컴퓨트 셰이더가 UAV 로 mip 0 에 써야 하는가.
+	//   BIND_UNORDERED_ACCESS 가 붙으면 드라이버가 텍스처 무손실 압축을 끄는
+	//   경우가 많아 샘플링 대역폭이 나빠지므로, 실제로 CS 를 쓸 때만 켠다.
+	//   (3채널 BGR 확장만 해당. 1/4채널은 UpdateSubresource 직행)
+	bool CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format, bool needsComputeUpload);
+	void GenerateSingleMips();
+	void ReleaseUnusedModeResources(RenderMode activeMode);
 	bool CreateRawUploadBuffer(uint32_t maxByteSize);
 	bool OpenSharedResource(HANDLE sharedHandle);
 	void UpdateImageState(ImageInputSource source, uint32_t width, uint32_t height, RenderMode mode, uint32_t channel);
@@ -117,7 +129,8 @@ private:
 
 	// Pipeline
 	ID3D11VertexShader* m_vs = nullptr;
-	ID3D11PixelShader* m_ps = nullptr;
+	ID3D11PixelShader* m_ps = nullptr;      // 4채널(BGRA)
+	ID3D11PixelShader* m_grayPS = nullptr;  // 1채널(R8/R16) — .r 을 3채널로 복제
 	ID3D11PixelShader* m_wirePS = nullptr;
 	ID3D11InputLayout* m_inputLayout = nullptr;
 	ID3D11ComputeShader* m_singleTextureCS = nullptr;
@@ -132,7 +145,11 @@ private:
 	ID3D11Buffer* m_wireColorBuffer = nullptr;
 
 	// Texture
-	ID3D11SamplerState* m_sampler = nullptr;
+	// Tiled 는 POINT 고정. 타일 텍스처는 MipLevels=1 이고 배열 슬라이스 경계에서
+	// CLAMP 되므로 LINEAR 축소를 걸면 타일마다 테두리 텍셀이 번져 이음새가 보인다.
+	ID3D11SamplerState* m_samplerPoint = nullptr;
+	// Single 은 밉 체인이 있으므로 축소는 LINEAR+MIP, 확대는 POINT(픽셀 경계 보존).
+	ID3D11SamplerState* m_samplerLinearMip = nullptr;
 
 	// Rasterizer
 	ID3D11RasterizerState* m_rasterizerSolid = nullptr;
@@ -143,7 +160,8 @@ private:
 	TileManager* m_tileManager = nullptr;
 
 	// State
-	bool m_renderWireFrame = true;
+	// 디버그용 타일 경계 표시. 매 프레임 드로우가 2배가 되므로 기본은 끔.
+	bool m_renderWireFrame = false;
 	uint32_t m_texWidth = 0;
 	uint32_t m_texHeight = 0;
 	DXGI_FORMAT m_texFormat = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
@@ -166,6 +184,11 @@ private:
 
 	uint32_t m_singleTextureWidth = 0;
 	uint32_t m_singleTextureHeight = 0;
+	DXGI_FORMAT m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+
+	// Single 모드 VRAM 예산을 나눌 동시 뷰어 개수.
+	// 검사 UI 에서 뷰어를 여러 개 띄우면 전량 상주 비용이 그 배수로 곱해진다.
+	uint32_t m_concurrentViewCount = 1;
 	ID3D11Texture2D* m_singleTexture = nullptr;
 	ID3D11ShaderResourceView* m_singleSRV = nullptr;
 	ID3D11UnorderedAccessView* m_singleUAV = nullptr;

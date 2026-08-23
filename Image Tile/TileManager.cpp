@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "TileManager.h"
 #include "TilePool.h"
+#include "TileFormat.h"
+
+#include "../D3D11ImageView/HighResolutionTimer.h"
 
 #include "../../../Module/Core/ShapeType/Rect2i.h"
 
@@ -8,130 +11,228 @@
 #include <cmath>
 #include <algorithm>
 
-TileManager::~TileManager()
+namespace
 {
-	ReleaseGPUResources();
+	constexpr uint32_t kTileSize = 512;
+
+	// 팬/줌 왕복 시 재업로드를 막기 위한 작업세트 유지 계수.
+	constexpr uint32_t kRetainFactor = 2;
+
+	// 프레임당 타일 업로드에 허용할 시간.
+	// 예전에는 MAX_UPLOAD_PER_FRAME=4 로 장수를 셌지만, LOD0 의 연속 memcpy 와
+	// 고LOD 의 스트라이드 샘플링은 비용이 수십 배 차이나서 프레임 시간을
+	// 예측할 수 없었다.
+	constexpr double kUploadBudgetMs = 2.0;
+
+	// Evict 임계값(프레임 수). 이보다 오래 안 쓰인 타일은 풀에 반납한다.
+	constexpr uint64_t kEvictFrameThreshold = 600;
+
+	inline uint32_t CeilDiv(uint32_t a, uint32_t b) noexcept
+	{
+		return (b == 0) ? 0 : ((a + b - 1) / b);
+	}
 }
 
-void TileManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* contextD3D, const TileSystemDesc& desc)
+TileManager::TileManager()
+	: m_uploadTimer(std::make_unique<HighResolutionTimer>())
+{
+}
+
+TileManager::~TileManager()
+{
+	ReleasePools();
+}
+
+void TileManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* contextD3D)
 {
 	m_device = device;
 	m_contextD3D = contextD3D;
+}
+
+bool TileManager::NeedsReconfigure(uint32_t viewWidth, uint32_t viewHeight) const
+{
+	if (m_pools.empty())
+		return true;
+
+	// 작업세트는 ceil(view/tileSize)+1 로 결정되므로, 그 값이 달라질 때만
+	// 재구성한다. 창을 몇 픽셀 끄는 것으로 풀을 다시 만들지 않는다.
+	const uint32_t oldGridW = CeilDiv(m_configuredViewWidth, kTileSize) + 1;
+	const uint32_t oldGridH = CeilDiv(m_configuredViewHeight, kTileSize) + 1;
+	const uint32_t newGridW = CeilDiv(viewWidth, kTileSize) + 1;
+	const uint32_t newGridH = CeilDiv(viewHeight, kTileSize) + 1;
+
+	if (newGridW > oldGridW || newGridH > oldGridH)
+		return true;
+
+	// maxLOD 는 뷰포트의 짧은 변에 의존한다.
+	const uint32_t imageMax = (std::max)(m_tileSystemDesc.imageWidth, m_tileSystemDesc.imageHeight);
+	const uint32_t oldViewMin = (std::max)(1u, (std::min)(m_configuredViewWidth, m_configuredViewHeight));
+	const uint32_t newViewMin = (std::max)(1u, (std::min)(viewWidth, viewHeight));
+
+	if (imageMax == 0)
+		return false;
+
+	const auto lodFor = [imageMax](uint32_t viewMin)
+		{
+			const double ratio = static_cast<double>(imageMax) / static_cast<double>(viewMin);
+			return (ratio <= 1.0) ? 0u : static_cast<uint32_t>(std::ceil(std::log2(ratio)));
+		};
+
+	return lodFor(newViewMin) != lodFor(oldViewMin);
+}
+
+bool TileManager::Configure(uint32_t imageWidth, uint32_t imageHeight,
+	uint32_t channel, uint32_t bitDepth,
+	uint32_t viewWidth, uint32_t viewHeight)
+{
+	if (!m_device || imageWidth == 0 || imageHeight == 0)
+		return false;
+
+	ReleasePools();
+
+	TileSystemDesc desc = {};
+	desc.imageWidth = imageWidth;
+	desc.imageHeight = imageHeight;
+	desc.sourceChannel = channel;
+	desc.format = TileFormat::ResolveTextureFormat(channel, bitDepth);
+
+	// ── maxLOD: "이미지 전체가 뷰포트에 들어오는 LOD"
+	//
+	// 이 값이어야 fit 줌에서 SelectLOD 가 clamp 되지 않고, 1 텍셀 ≈ 1 화면 픽셀이
+	// 유지된다. 타일 텍스처는 MipLevels=1 이므로 clamp 되어 추가 축소가 걸리면
+	// 축소 에일리어싱이 그대로 보인다.
+	const uint32_t imageMax = (std::max)(imageWidth, imageHeight);
+	const uint32_t viewMin = (std::max)(1u, (std::min)(viewWidth, viewHeight));
+
+	const double lodRatio = static_cast<double>(imageMax) / static_cast<double>(viewMin);
+	desc.maxLOD = (lodRatio <= 1.0)
+		? 0u
+		: static_cast<uint32_t>(std::ceil(std::log2(lodRatio)));
+
+	// ── 작업세트
+	//
+	// 활성 LOD 에서 타일 1 장은 화면에서 항상 tileSize 픽셀을 덮는다
+	// (zoom ≈ 2^-L 이므로 tileSize * 2^L * zoom = tileSize).
+	// 따라서 필요 타일 수는 이미지 크기와 무관하게 뷰포트만의 함수다.
+	const uint32_t gridW = CeilDiv(viewWidth, kTileSize) + 1;
+	const uint32_t gridH = CeilDiv(viewHeight, kTileSize) + 1;
+	const uint32_t workingSet = (std::max)(1u, gridW * gridH);
+
+	desc.workingSetTiles = workingSet;
+
+	// ── LOD 별 용량
+	//
+	// min(전체 타일 수, 작업세트 * 유지계수).
+	// maxLOD 정의상 그 레벨의 전체 타일 수는 작업세트 이하이므로,
+	// 이 식이 maxLOD 를 자동으로 전량 상주시킨다 -> 부모 fallback 항상 성공.
+	desc.lods.resize(desc.maxLOD + 1);
+	for (uint32_t lod = 0; lod <= desc.maxLOD; ++lod)
+	{
+		const uint32_t span = kTileSize << lod;
+		const uint32_t whole = (std::max)(1u, CeilDiv(imageWidth, span) * CeilDiv(imageHeight, span));
+
+		desc.lods[lod].tileSize = kTileSize;
+		desc.lods[lod].capacity = (std::min)(whole, workingSet * kRetainFactor);
+	}
 
 	m_tileSystemDesc = desc;
-
 	m_maxLOD = desc.maxLOD;
-	assert(desc.lods.size() == m_maxLOD + 1);
+	m_lastLOD = 0;
+	m_configuredViewWidth = viewWidth;
+	m_configuredViewHeight = viewHeight;
 
-	m_currentGpuCache.size = m_gpuUploadTextureSize;
-
-	m_pools.resize(m_maxLOD + 1);
-
-	for (uint32_t lod = 0; lod <= m_maxLOD; lod++)
+	m_pools.resize(desc.maxLOD + 1);
+	for (uint32_t lod = 0; lod <= desc.maxLOD; ++lod)
 	{
-		const TileLODDesc& lodDesc = desc.lods[lod];
+		m_pools[lod] = std::make_unique<TilePool>(
+			m_device, desc.lods[lod].tileSize, desc.lods[lod].capacity, desc.format);
 
-		m_pools[lod] = std::make_unique<TilePool>(device, lodDesc.tileSize, lodDesc.capacity, m_uploadMode);
-	}
-
-	if (!InitializeGPUResources(device))
-	{
-
-	}
-}
-
-bool TileManager::InitializeGPUResources(ID3D11Device* device)
-{
-	HRESULT hr = S_OK;
-
-	if (m_uploadMode == UploadMode::Hybrid)
-	{
-		D3D11_BUFFER_DESC uploadDesc = {};
-
-		uploadDesc.ByteWidth = m_gpuUploadTextureSize * m_gpuUploadTextureSize * 4;
-		uploadDesc.Usage = D3D11_USAGE_DYNAMIC;
-		uploadDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-		uploadDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-		uploadDesc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
-
-		hr = device->CreateBuffer(&uploadDesc, nullptr, &m_rawUploadBuffer);
-		if (FAILED(hr))
-			return false;
-
-		D3D11_SHADER_RESOURCE_VIEW_DESC uploadSRVDesc = {};
-		uploadSRVDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-		uploadSRVDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-		uploadSRVDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
-		uploadSRVDesc.BufferEx.NumElements = uploadDesc.ByteWidth / 4;
-
-		hr = device->CreateShaderResourceView(m_rawUploadBuffer, &uploadSRVDesc, &m_rawUploadSRV);
-		if (FAILED(hr))
-			return false;
-
-		ID3DBlob* csBlob = nullptr;
-		hr = ::D3DReadFileToBlob(L"../Shaders/TileSamplingCS.cso", &csBlob);
-
-		if (SUCCEEDED(hr))
+		if (!m_pools[lod]->GetSrvArray())
 		{
-			hr = device->CreateComputeShader(
-				csBlob->GetBufferPointer(),
-				csBlob->GetBufferSize(),
-				nullptr,
-				&m_rawUploadtileCS
-			);
-
-			SafeRelease(csBlob);
+			ReleasePools();
+			return false;
 		}
-
-		D3D11_BUFFER_DESC cbd = {};
-		cbd.Usage = D3D11_USAGE_DEFAULT;         // 잦은 업데이트를 위해 Dynamic 권장
-		cbd.ByteWidth = 32;                     // 16바이트 배수 유지 (현재 4개 uint = 16바이트지만 여유있게 32)
-		cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-
-		hr = device->CreateBuffer(&cbd, nullptr, &m_csConstantBuffer); // 공용 멤버 변수 사용 가정
-		if (FAILED(hr)) return false;
 	}
 
-	return SUCCEEDED(hr);
+	m_primed = false;
+	m_hasPendingUploads = false;
+
+	return true;
 }
 
-void TileManager::ReleaseGPUResources()
+void TileManager::ReleasePools()
 {
-	SafeRelease(m_rawUploadtileCS);
-	SafeRelease(m_rawUploadSRV);
-	SafeRelease(m_rawUploadBuffer);
-	SafeRelease(m_csConstantBuffer);
+	m_pools.clear();
+	m_visibleTiles.clear();
+	m_previousVisibleTiles.clear();
+	m_renderDataList.clear();
+	m_visibleKeys.clear();
+	m_primed = false;
+	m_hasPendingUploads = false;
 }
 
 void TileManager::ClearPools()
 {
 	for (auto& pool : m_pools)
 	{
-		pool->Clear();
+		if (pool)
+			pool->Clear();
 	}
+
 	m_visibleTiles.clear();
+	m_previousVisibleTiles.clear();
+	m_renderDataList.clear();
+	m_primed = false;
 }
 
-void TileManager::SetUploadMode(UploadMode mode)
+void TileManager::PrimeCoarsestLevel(const uint8_t* imageData, uint32_t imageWidth,
+	uint32_t imageStride, uint32_t imageHeight, uint32_t channel)
 {
-	m_uploadMode = mode;
+	if (m_pools.empty() || !imageData)
+		return;
+
+	TilePool* pool = m_pools[m_maxLOD].get();
+	if (!pool)
+		return;
+
+	const uint32_t span = m_tileSystemDesc.lods[m_maxLOD].tileSize << m_maxLOD;
+	const uint32_t countX = CeilDiv(imageWidth, span);
+	const uint32_t countY = CeilDiv(imageHeight, span);
+
+	// 채울 타일 목록을 먼저 모은다.
+	std::vector<Tile*> targets;
+	targets.reserve(static_cast<size_t>(countX) * countY);
+
+	for (uint32_t ty = 0; ty < countY; ++ty)
+	{
+		for (uint32_t tx = 0; tx < countX; ++tx)
+		{
+			const TileKey key{ static_cast<uint16_t>(m_maxLOD), tx, ty };
+
+			Tile* tile = pool->Acquire(key, 0);
+			if (tile && tile->state != TileState::Resident)
+				targets.push_back(tile);
+		}
+	}
+
+	// 프라이밍은 "끝날 때까지 안 그리는" 동기 작업이다.
+	// 예산을 무시하고 한 번에 채운다.
+	for (Tile* tile : targets)
+	{
+		ProduceTile(pool, tile, imageData, imageWidth, imageStride, imageHeight, channel);
+	}
+
+	m_primed = true;
 }
 
 void TileManager::UpdateVisibleTiles(const Core::ShapeType::Rect2i& viewPixelRect, float zoom, uint64_t frameID,
-	const uint8_t* imageData, uint32_t imageWidth, uint32_t imageStride, uint32_t imageHeight, uint32_t channel)
+	const uint8_t* imageData, uint32_t imageWidth, uint32_t imageStride, uint32_t imageHeight, uint32_t channel,
+	bool cameraSettled)
 {
-	m_previousVisibleTiles = m_visibleTiles;
+	if (m_pools.empty())
+		return;
 
-	//if (m_uploadMode == UploadMode::Hybrid) 
-	//{
-	//	static uint64_t lastProcessedFrame = 0;
-	//	if (lastProcessedFrame != frameID) 
-	//	{
-	//		// 프레임이 바뀌었으므로 이전 GPU 캐시는 더 이상 유효하지 않음
-	//		m_currentGpuCache.isValid = false;
-	//		lastProcessedFrame = frameID;
-	//	}
-	//}
+	m_previousVisibleTiles.swap(m_visibleTiles);
 
 	m_visibleTiles.clear();
 	m_renderDataList.clear();
@@ -139,136 +240,127 @@ void TileManager::UpdateVisibleTiles(const Core::ShapeType::Rect2i& viewPixelRec
 
 	const uint32_t LODLevel = SelectLOD(zoom);
 	TilePool* pool = m_pools[LODLevel].get();
+	if (!pool)
+		return;
 
-	std::vector<TileKey> keys;
-	keys.reserve(32);
-	CalcVisibleKeys(LODLevel, viewPixelRect, keys);
+	// ── 프리페치 마진
+	// GetViewImageRect() 는 보이는 영역으로 clamp 되어 마진이 0 이다.
+	// 한 타일만큼 넓혀서 조금만 움직여도 새 타일이 필요해지는 것을 막는다.
+	const int32_t margin = static_cast<int32_t>(m_tileSystemDesc.lods[LODLevel].tileSize << LODLevel);
 
-	uint32_t uploadCount = 0;
-	const uint32_t MAX_UPLOAD_PER_FRAME = 4; // 한 프레임에 최대 2개만 새로 생성
+	Core::ShapeType::Rect2i prefetchRect = viewPixelRect;
+	prefetchRect.left = (std::max)(0, prefetchRect.left - margin);
+	prefetchRect.top = (std::max)(0, prefetchRect.top - margin);
+	prefetchRect.right = (std::min)(static_cast<int32_t>(imageWidth), prefetchRect.right + margin);
+	prefetchRect.bottom = (std::min)(static_cast<int32_t>(imageHeight), prefetchRect.bottom + margin);
 
-	for (const TileKey& key : keys)
+	m_visibleKeys.clear();
+	m_visibleKeys.reserve(64);
+	CalcVisibleKeys(LODLevel, prefetchRect, m_visibleKeys);
+
+	// ── 로드 순서: 뷰포트 중심에서 가까운 것부터
+	// GLViewer 의 ReUseCheck_SingleBuffer_WorkOrder(이동 방향 우선)에 대응하며
+	// 더 단순하다. 예산이 걸려 일부만 올라갈 때 중앙이 먼저 채워진다.
+	const double centerX = (static_cast<double>(viewPixelRect.left) + viewPixelRect.right) * 0.5;
+	const double centerY = (static_cast<double>(viewPixelRect.top) + viewPixelRect.bottom) * 0.5;
+
+	std::sort(m_visibleKeys.begin(), m_visibleKeys.end(),
+		[this, centerX, centerY](const TileKey& a, const TileKey& b)
+		{
+			const Core::ShapeType::Rect2i ra = CalcTilePixelRect(a);
+			const Core::ShapeType::Rect2i rb = CalcTilePixelRect(b);
+
+			const double ax = (static_cast<double>(ra.left) + ra.right) * 0.5 - centerX;
+			const double ay = (static_cast<double>(ra.top) + ra.bottom) * 0.5 - centerY;
+			const double bx = (static_cast<double>(rb.left) + rb.right) * 0.5 - centerX;
+			const double by = (static_cast<double>(rb.top) + rb.bottom) * 0.5 - centerY;
+
+			return (ax * ax + ay * ay) < (bx * bx + by * by);
+		});
+
+	const double uploadStartMs = m_uploadTimer->GetTotalTimeMiliSeconds();
+
+	for (const TileKey& key : m_visibleKeys)
 	{
 		Tile* tile = pool->Acquire(key, frameID);
 		if (!tile)
-			continue;
-
-		if (tile->state == TileState::None)
 		{
-			if (m_uploadMode == UploadMode::OnlyCPU)
-			{
-				// CPU 모드: 멀티스레드로 직접 픽셀 샘플링하여 전송
-				if (uploadCount < MAX_UPLOAD_PER_FRAME)
-				{
-					UploadTileData_CPU(pool, tile, imageData, imageWidth, imageStride, imageHeight, channel);
-
-					//UploadTileData_CPU_Parallel(pool, tile, imageData, imageWidth, imageStride, imageHeight);
-					tile->state = TileState::Ready;
-					uploadCount++;
-				}
-				else
-				{
-					// 이번 프레임엔 로드하지 않음 (건너뜀)
-					m_hasPendingUploads = true;
-					tile->state = TileState::None;
-					//continue;
-				}
-			}
-			else if (m_uploadMode == UploadMode::Hybrid)
-			{
-				// 이 타일이 현재 캐시 영역에 있는지 확인
-				uint32_t lodScale = 1u << tile->key.lod;
-				uint32_t targetRegionSize = m_tileSystemDesc.lods[tile->key.lod].tileSize * lodScale;
-				uint32_t targetStartX = tile->key.x * targetRegionSize;
-				uint32_t targetStartY = tile->key.y * targetRegionSize;
-
-				bool inCache = (m_currentGpuCache.isValid &&
-					m_currentGpuCache.lod == tile->key.lod &&
-					m_currentGpuCache.Contains(targetStartX, targetStartY, targetRegionSize));
-
-				if (inCache)
-				{
-					// 캐시에 있으면 전송 비용이 거의 없으므로 즉시 업로드
-					UploadTileData_GPU(pool, tile, imageData, imageWidth, imageStride, imageHeight, channel);
-					tile->state = TileState::Ready;
-				}
-				else if (uploadCount < MAX_UPLOAD_PER_FRAME)
-				{
-					// 캐시에 없으면 새로 Map 해야 하므로 횟수 제한 적용
-					if (tile->key.lod <= 3)
-						UploadTileData_GPU(pool, tile, imageData, imageWidth, imageStride, imageHeight, channel);
-					else
-						UploadTileData_CPU(pool, tile, imageData, imageWidth, imageStride, imageHeight, channel);
-
-					tile->state = TileState::Ready;
-					uploadCount++;
-				}
-				else
-				{
-					// 이번 프레임엔 로드하지 않음 (건너뜀)
-					m_hasPendingUploads = true;
-					tile->state = TileState::None;
-					//continue;
-				}
-			}
+			// 용량 부족. 부모 fallback 으로 그린다.
+			m_hasPendingUploads = true;
 		}
 
-		if (tile->state == TileState::Ready)
-			tile->state = TileState::Active;
-
-		// 2. [핵심] Fallback 로직 적용
-		TileRenderData renderData;
-		renderData.targetKey = key; // 원래 그려져야 할 위치/LOD 정보
-
-		if (tile->state == TileState::Active)
+		if (tile && tile->state == TileState::None)
 		{
-			renderData.tile = tile;
-			renderData.u0 = 0.0f; renderData.v0 = 0.0f; renderData.u1 = 1.0f; renderData.v1 = 1.0f;
-		}
-		else
-		{
-			// 현재 타일이 없으면 부모를 찾아본다
-			TileKey parentKey;
-			Tile* parent = FindAvailableParent(key, frameID, parentKey);
-			if (parent)
+			// ── 모션 게이팅
+			// 카메라가 움직이는 중이면 새 타일을 만들지 않는다. 드래그 중에
+			// 스치는 타일 대부분은 업로드가 끝나기도 전에 화면을 벗어나므로
+			// 그 비용이 순수 낭비다. 멈추면 정확한 LOD 로 채운다.
+			//
+			// ── 시간 예산
+			// 프레임당 kUploadBudgetMs 만큼만 생산한다. 넘으면 부모 fallback 으로
+			// 그리고 다음 프레임에 이어서 채운다.
+			const bool budgetLeft =
+				(m_uploadTimer->GetTotalTimeMiliSeconds() - uploadStartMs) < kUploadBudgetMs;
+
+			if (cameraSettled && budgetLeft)
 			{
-				renderData.tile = parent;
-
-				// 부모와 자식의 해상도 차이 비율 (예: 1단계 차이면 2, 2단계 차이면 4)
-				uint32_t ratio = 1 << (parentKey.lod - key.lod);
-
-				float size = 1.0f / (float)ratio;
-
-				// 부모 타일 한 변에 들어가는 자식 타일의 개수가 ratio개이므로
-				// 자식 좌표(x, y)를 ratio로 나눈 나머지가 부모 내에서의 인덱스가 됩니다.
-				renderData.u0 = (key.x % ratio) * size;
-				renderData.v0 = (key.y % ratio) * size;
-				renderData.u1 = renderData.u0 + size;
-				renderData.v1 = renderData.v0 + size;
+				ProduceTile(pool, tile, imageData, imageWidth, imageStride, imageHeight, channel);
 			}
 			else
 			{
-				// 부모도 없으면 그리지 않음 (혹은 가장 낮은 LOD 텍스처를 씌움)
-				continue;
+				m_hasPendingUploads = true;
 			}
 		}
 
+		TileRenderData renderData;
+		renderData.targetKey = key;
 
-		////
-		tile->lastFrameUsed = frameID;
-		m_visibleTiles.push_back(tile);
+		if (tile && tile->state == TileState::Resident)
+		{
+			renderData.tile = tile;
+			renderData.u0 = 0.0f; renderData.v0 = 0.0f;
+			renderData.u1 = 1.0f; renderData.v1 = 1.0f;
+		}
+		else
+		{
+			// 아직 없으면 상위(저해상도) 부모 타일의 해당 영역을 잘라 쓴다.
+			// maxLOD 가 전량 상주하므로 프라이밍 이후에는 항상 성공한다.
+			TileKey parentKey;
+			Tile* parent = FindAvailableParent(key, frameID, parentKey);
+			if (!parent)
+				continue;
+
+			renderData.tile = parent;
+
+			const uint32_t ratio = 1u << (parentKey.lod - key.lod);
+			const float size = 1.0f / static_cast<float>(ratio);
+
+			renderData.u0 = (key.x % ratio) * size;
+			renderData.v0 = (key.y % ratio) * size;
+			renderData.u1 = renderData.u0 + size;
+			renderData.v1 = renderData.v0 + size;
+		}
+
+		renderData.tile->lastFrameUsed = frameID;
+		m_visibleTiles.push_back(renderData.tile);
 		m_renderDataList.push_back(renderData);
 	}
 
+	// 직전 프레임에 보였던 타일도 살려둔다(짧은 왕복에서 재업로드 방지).
+	// 단 EvictLRU 는 lastFrameUsed == frameID 인 타일을 건너뛰므로,
+	// 이 갱신 때문에 현재 프레임 가시 타일이 축출되는 일은 없다.
 	for (Tile* oldTile : m_previousVisibleTiles)
 	{
-		oldTile->lastFrameUsed = frameID;
+		if (oldTile->lastFrameUsed != frameID)
+			oldTile->lastFrameUsed = frameID - 1;
 	}
 
-	for (uint32_t i = 0; i <= m_maxLOD; i++)
+	// 오래 안 쓰인 타일 반납. 예전에는 이 호출이 주석 처리되어 풀이 절대
+	// 줄지 않았다. maxLOD 풀은 전량 상주가 목적이므로 제외한다.
+	for (uint32_t lod = 0; lod < m_maxLOD; ++lod)
 	{
-		//if (i == LODLevel /* m_pools[i]->HasInactiveTiles()*/)
-		//	m_pools[i]->Evict(frameID, 120 * 10);
+		if (m_pools[lod])
+			m_pools[lod]->Evict(frameID, kEvictFrameThreshold);
 	}
 }
 
@@ -279,12 +371,15 @@ Tile* TileManager::FindAvailableParent(const TileKey& childKey, uint64_t frameID
 	// 현재 LOD보다 숫자가 큰(저해상도) 쪽으로 탐색
 	for (uint32_t l = childKey.lod + 1; l <= m_maxLOD; ++l)
 	{
-		currentKey.lod = l;
+		currentKey.lod = static_cast<uint16_t>(l);
 		currentKey.x /= 2; // 부모는 자식의 절반 좌표
 		currentKey.y /= 2;
 
+		if (!m_pools[l])
+			continue;
+
 		Tile* parent = m_pools[l]->Find(currentKey);
-		if (parent && parent->state == TileState::Active)
+		if (parent && parent->state == TileState::Resident)
 		{
 			parent->lastFrameUsed = frameID; // 사용 중임을 표시해 캐시 유지
 			outParentKey = currentKey;
@@ -294,97 +389,62 @@ Tile* TileManager::FindAvailableParent(const TileKey& childKey, uint64_t frameID
 	return nullptr;
 }
 
-void TileManager::UploadTileData_CPU(TilePool* pool, Tile* tile, const uint8_t* imageData, uint32_t imageWidth, uint32_t imageStride, uint32_t imageHeight, uint32_t channel)
+TileSampler::SampleDesc TileManager::MakeSampleDesc(const Tile* tile, const uint8_t* imageData,
+	uint32_t imageWidth, uint32_t imageStride, uint32_t imageHeight, uint32_t channel) const
 {
-	ID3D11Texture2D* textureArray = pool->GetTextureArray();
-	if (!textureArray)
-		return;
+	TileSampler::SampleDesc desc = {};
 
 	const uint32_t lodScale = 1u << tile->key.lod;
 	const uint32_t tileSize = m_tileSystemDesc.lods[tile->key.lod].tileSize;
 
-	const uint32_t srcStartX = tile->key.x * tileSize * lodScale;
-	const uint32_t srcStartY = tile->key.y * tileSize * lodScale;
+	desc.imageData = imageData;
+	desc.imageWidth = imageWidth;
+	desc.imageHeight = imageHeight;
+	desc.imageStride = imageStride;
+	desc.channel = channel;
 
-	if (m_cpuScratchBuffer.size() < static_cast<size_t>(tileSize * tileSize * 4))
-	{
-		m_cpuScratchBuffer.resize(static_cast<size_t>(tileSize * tileSize * 4));
-	}
+	desc.tileSize = tileSize;
+	desc.lodScale = lodScale;
+	desc.srcStartX = tile->key.x * tileSize * lodScale;
+	desc.srcStartY = tile->key.y * tileSize * lodScale;
 
-	uint32_t* pDestData = reinterpret_cast<uint32_t*>(m_cpuScratchBuffer.data());
+	desc.format = m_tileSystemDesc.format;
 
-	if (channel == 1) // Gray
-	{
-		for (uint32_t y = 0; y < tileSize; y++)
-		{
-			uint32_t currentSrcY = srcStartY + (y * lodScale);
-			if (currentSrcY >= imageHeight) continue;
+	return desc;
+}
 
-			uint32_t* pDstRow = pDestData + (y * tileSize);
-			const uint8_t* pSrcRowBase = imageData + (currentSrcY * imageStride);
+bool TileManager::ProduceTile(TilePool* pool, Tile* tile, const uint8_t* imageData,
+	uint32_t imageWidth, uint32_t imageStride, uint32_t imageHeight, uint32_t channel)
+{
+	if (!pool || !tile || !imageData)
+		return false;
 
-			for (uint32_t x = 0; x < tileSize; x++)
-			{
-				uint32_t currentSrcX = srcStartX + (x * lodScale);
-				if (currentSrcX < imageWidth)
-				{
-					uint8_t g = pSrcRowBase[currentSrcX];
-					pDstRow[x] = (0xFF << 24) | (g << 16) | (g << 8) | g;
-				}
-			}
-		}
-	}
-	else if (channel == 3) // BGR
-	{
-		for (uint32_t y = 0; y < tileSize; y++)
-		{
-			uint32_t currentSrcY = srcStartY + (y * lodScale);
-			if (currentSrcY >= imageHeight) continue;
+	const TileSampler::SampleDesc desc =
+		MakeSampleDesc(tile, imageData, imageWidth, imageStride, imageHeight, channel);
 
-			uint32_t* pDstRow = pDestData + (y * tileSize);
-			const uint8_t* pSrcRowBase = imageData + (currentSrcY * imageStride);
+	const size_t needed = TileSampler::RequiredBytes(desc);
+	if (m_cpuScratchBuffer.size() < needed)
+		m_cpuScratchBuffer.resize(needed);
 
-			for (uint32_t x = 0; x < tileSize; x++)
-			{
-				uint32_t currentSrcX = srcStartX + (x * lodScale);
-				if (currentSrcX < imageWidth)
-				{
-					const uint8_t* pPixel = pSrcRowBase + (currentSrcX * 3);
-					pDstRow[x] = (0xFF << 24) | (pPixel[2] << 16) | (pPixel[1] << 8) | pPixel[0];
-				}
-			}
-		}
-	}
-	else if (channel == 4) // BGRA
-	{
-		if (lodScale == 1) { // 추가된 최적화 경로
-			for (uint32_t y = 0; y < tileSize; y++)
-			{
-				uint32_t currentSrcY = srcStartY + y;
-				if (currentSrcY >= imageHeight) break;
-				uint32_t* pDstRow = pDestData + (y * tileSize);
-				const uint8_t* pSrcRowBase = imageData + (currentSrcY * imageStride) + (srcStartX * 4);
+	if (!TileSampler::Sample(desc, m_cpuScratchBuffer.data()))
+		return false;
 
-				// 이미지 가로 경계 처리 후 복사
-				uint32_t copyWidth = (srcStartX + tileSize <= imageWidth) ? tileSize :
-					(imageWidth > srcStartX ? imageWidth - srcStartX : 0);
-				if (copyWidth > 0) memcpy(pDstRow, pSrcRowBase, copyWidth * 4);
-			}
-		}
-		else { // 기존 샘플링 루프
-			for (uint32_t y = 0; y < tileSize; y++)
-			{
-				uint32_t currentSrcY = srcStartY + (y * lodScale);
-				if (currentSrcY >= imageHeight) continue;
-				uint32_t* pDstRow = pDestData + (y * tileSize);
-				const uint32_t* pSrcRowBase = reinterpret_cast<const uint32_t*>(imageData + (currentSrcY * imageStride));
-				for (uint32_t x = 0; x < tileSize; x++) {
-					uint32_t currentSrcX = srcStartX + (x * lodScale);
-					if (currentSrcX < imageWidth) pDstRow[x] = pSrcRowBase[currentSrcX];
-				}
-			}
-		}
-	}
+	UploadStagingToTile(tile, m_cpuScratchBuffer.data(), TileSampler::RowPitch(desc));
+
+	return true;
+}
+
+void TileManager::UploadStagingToTile(Tile* tile, const uint8_t* src, uint32_t rowPitch)
+{
+	if (!tile || !src || !m_contextD3D)
+		return;
+
+	if (tile->key.lod >= m_pools.size() || !m_pools[tile->key.lod])
+		return;
+
+	ID3D11Texture2D* textureArray = m_pools[tile->key.lod]->GetTextureArray();
+	if (!textureArray)
+		return;
 
 	const uint32_t subresourceIndex = ::D3D11CalcSubresource(0, tile->arrayIndex, 1);
 
@@ -392,131 +452,28 @@ void TileManager::UploadTileData_CPU(TilePool* pool, Tile* tile, const uint8_t* 
 		textureArray,
 		subresourceIndex,
 		nullptr,
-		m_cpuScratchBuffer.data(),
-		tileSize * 4,
+		src,
+		rowPitch,
 		0
 	);
-}
 
-void TileManager::UploadTileData_GPU(TilePool* pool, Tile* tile, const uint8_t* imageData, uint32_t imageWidth, uint32_t imageStride, uint32_t imageHeight, uint32_t channel)
-{
-	if (m_uploadMode != UploadMode::Hybrid)
-		return;
-
-	if (!m_rawUploadBuffer || !m_contextD3D || !m_csConstantBuffer || !m_rawUploadSRV)
-		return;
-
-	const uint32_t lodScale = 1u << tile->key.lod;
-	const uint32_t tileSize = m_tileSystemDesc.lods[tile->key.lod].tileSize;
-	const uint32_t targetRegionSize = tileSize * lodScale;
-
-	// 타일의 실제 원본 좌표
-	const uint32_t targetStartX = tile->key.x * targetRegionSize;
-	const uint32_t targetStartY = tile->key.y * targetRegionSize;
-
-	// [1. 캐시 체크] 현재 GPU Raw 버퍼에 이 타일 영역이 이미 들어있는가?
-	bool needUpload = true;
-	if (m_currentGpuCache.isValid &&
-		m_currentGpuCache.lod == tile->key.lod &&
-		m_currentGpuCache.Contains(targetStartX, targetStartY, targetRegionSize))
-	{
-		needUpload = false; // 캐시 히트! 전송 생략
-	}
-
-	if (needUpload)
-	{
-		// 캐시 그리드(예: 8k 단위)에 맞춰 시작 좌표 정렬
-		uint32_t cacheStartX = (targetStartX / m_gpuUploadTextureSize) * m_gpuUploadTextureSize;
-		uint32_t cacheStartY = (targetStartY / m_gpuUploadTextureSize) * m_gpuUploadTextureSize;
-
-		D3D11_MAPPED_SUBRESOURCE mapped;
-		// D3D11_MAP_WRITE_DISCARD를 사용하여 이전 프레임의 데이터 장벽 제거
-		if (SUCCEEDED(m_contextD3D->Map(m_rawUploadBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
-		{
-			uint8_t* pDst = static_cast<uint8_t*>(mapped.pData);
-
-			// 캐시 크기(m_gpuUploadTextureSize)만큼 원본에서 복사
-			for (uint32_t y = 0; y < m_gpuUploadTextureSize; ++y)
-			{
-				uint32_t currentSrcY = cacheStartY + y;
-				if (currentSrcY >= imageHeight) break;
-
-				// CPU는 단순히 메모리 복사만 수행 (매우 빠름)
-				const uint8_t* pSrc = imageData + (currentSrcY * imageStride) + (cacheStartX * channel);
-
-				// 경계 처리: 이미지 폭을 벗어나지 않게 복사
-				uint32_t copyWidth = (cacheStartX + m_gpuUploadTextureSize <= imageWidth) ?
-					m_gpuUploadTextureSize : (imageWidth > cacheStartX ? imageWidth - cacheStartX : 0);
-
-				if (copyWidth > 0)
-				{
-					memcpy(pDst + (y * m_gpuUploadTextureSize * channel), pSrc, copyWidth * channel);
-				}
-			}
-			m_contextD3D->Unmap(m_rawUploadBuffer, 0);
-
-			// 캐시 정보 갱신
-			m_currentGpuCache.lod = tile->key.lod;
-			m_currentGpuCache.startX = cacheStartX;
-			m_currentGpuCache.startY = cacheStartY;
-			m_currentGpuCache.isValid = true;
-		}
-	}
-
-	// [2. 쉐이더용 오프셋 계산] 8k 캐시 버퍼 내에서의 상대적 위치
-	uint32_t relativeX = targetStartX - m_currentGpuCache.startX;
-	uint32_t relativeY = targetStartY - m_currentGpuCache.startY;
-
-	// [3. 상수 버퍼 업데이트]
-	struct {
-		uint32_t lodScale;
-		uint32_t channels;
-		uint32_t destIndex;
-		uint32_t cacheWidth; // Raw Buffer의 가로폭 (m_gpuUploadTextureSize)
-		uint32_t srcOffsetX; // 캐시 내 시작 X
-		uint32_t srcOffsetY; // 캐시 내 시작 Y
-		uint32_t padding[2]; // 16바이트 정렬용
-	} cb;
-
-	cb.lodScale = lodScale;
-	cb.channels = channel;
-	cb.destIndex = tile->arrayIndex;
-	cb.cacheWidth = m_gpuUploadTextureSize;
-	cb.srcOffsetX = relativeX;
-	cb.srcOffsetY = relativeY;
-
-	m_contextD3D->UpdateSubresource(m_csConstantBuffer, 0, nullptr, &cb, 0, 0);
-
-	// [4. Dispatch]
-	m_contextD3D->CSSetShader(m_rawUploadtileCS, nullptr, 0);
-	m_contextD3D->CSSetConstantBuffers(0, 1, &m_csConstantBuffer);
-	m_contextD3D->CSSetShaderResources(0, 1, &m_rawUploadSRV);
-
-	ID3D11UnorderedAccessView* uav = pool->GetUavArray();
-	m_contextD3D->CSSetUnorderedAccessViews(0, 1, &uav, nullptr);
-
-	m_contextD3D->Dispatch((tileSize + 15) / 16, (tileSize + 15) / 16, 1);
-
-	// [5. Unbind] (핵심!)
-	ID3D11UnorderedAccessView* nullUAV = nullptr;
-	m_contextD3D->CSSetUnorderedAccessViews(0, 1, &nullUAV, nullptr);
-	ID3D11ShaderResourceView* nullSRV = nullptr;
-	m_contextD3D->CSSetShaderResources(0, 1, &nullSRV);
-	ID3D11Buffer* nullCB = nullptr;
-	m_contextD3D->CSSetConstantBuffers(0, 1, &nullCB);
+	tile->state = TileState::Resident;
 }
 
 uint32_t TileManager::SelectLOD(float zoom) const
 {
 	if (zoom >= 1.0f)
+	{
+		m_lastLOD = 0;
 		return 0;
+	}
 
 	const float lodF = std::log2f(1.0f / zoom);
-	uint32_t lod = std::clamp(
+	uint32_t lod = (std::clamp)(
 		static_cast<uint32_t>(std::floor(lodF)),
 		0u, m_maxLOD);
 
-	// 히스테리시스
+	// 히스테리시스: 경계에서 LOD 가 떨리는 것을 막는다.
 	if (lod > m_lastLOD && lodF < m_lastLOD + 0.2f)
 		lod = m_lastLOD;
 
@@ -527,21 +484,29 @@ uint32_t TileManager::SelectLOD(float zoom) const
 
 void TileManager::CalcVisibleKeys(uint32_t LODLevel, const Core::ShapeType::Rect2i& view, std::vector<TileKey>& outKeys) const
 {
+	if (view.right <= view.left || view.bottom <= view.top)
+		return;
+
 	const uint32_t scale = 1u << LODLevel;
+	const uint32_t tileSize = m_tileSystemDesc.lods[LODLevel].tileSize;
 
-	const auto& tileLODDesc = m_tileSystemDesc.lods[LODLevel];
-	const uint32_t tileSize = tileLODDesc.tileSize;
+	// view 는 Camera2D 에서 0 이상으로 clamp 되어 오지만, 음수가 들어오면
+	// unsigned 변환으로 거대한 값이 되므로 방어한다.
+	const uint32_t left = static_cast<uint32_t>((std::max)(0, view.left));
+	const uint32_t top = static_cast<uint32_t>((std::max)(0, view.top));
+	const uint32_t right = static_cast<uint32_t>((std::max)(0, view.right));
+	const uint32_t bottom = static_cast<uint32_t>((std::max)(0, view.bottom));
 
-	const uint32_t startX = (view.left / scale) / tileSize;
-	const uint32_t endX = ((view.right - 1) / scale) / tileSize;
-	const uint32_t startY = (view.top / scale) / tileSize;
-	const uint32_t endY = ((view.bottom - 1) / scale) / tileSize;
+	const uint32_t startX = (left / scale) / tileSize;
+	const uint32_t endX = ((right - 1) / scale) / tileSize;
+	const uint32_t startY = (top / scale) / tileSize;
+	const uint32_t endY = ((bottom - 1) / scale) / tileSize;
 
 	for (uint32_t y = startY; y <= endY; y++)
 	{
 		for (uint32_t x = startX; x <= endX; x++)
 		{
-			outKeys.push_back({ (uint16_t)LODLevel, x, y });
+			outKeys.push_back({ static_cast<uint16_t>(LODLevel), x, y });
 		}
 	}
 }
@@ -558,22 +523,31 @@ const std::vector<TileRenderData>& TileManager::GetRenderDataList() const
 
 void TileManager::GetTileSize(uint32_t lodLevel, uint32_t& tileWidth, uint32_t& tileHeight) const
 {
-	tileWidth = m_tileSystemDesc.lods[lodLevel].tileSize;
-	tileHeight = m_tileSystemDesc.lods[lodLevel].tileSize;
+	if (lodLevel < m_tileSystemDesc.lods.size())
+	{
+		tileWidth = m_tileSystemDesc.lods[lodLevel].tileSize;
+		tileHeight = m_tileSystemDesc.lods[lodLevel].tileSize;
+	}
+	else
+	{
+		tileWidth = kTileSize;
+		tileHeight = kTileSize;
+	}
 }
 
 Core::ShapeType::Rect2i TileManager::CalcTilePixelRect(const TileKey& key) const
 {
-	const auto& tileLODDesc = m_tileSystemDesc.lods[key.lod];
+	uint32_t tileSize = kTileSize;
+	if (key.lod < m_tileSystemDesc.lods.size())
+		tileSize = m_tileSystemDesc.lods[key.lod].tileSize;
 
-	const uint32_t tileSize = tileLODDesc.tileSize;
 	const uint32_t scale = 1u << key.lod;
 
 	Core::ShapeType::Rect2i rect = {};
-	rect.left = key.x * tileSize * scale;
-	rect.top = key.y * tileSize * scale;
-	rect.right = rect.left + tileSize * scale;
-	rect.bottom = rect.top + tileSize * scale;
+	rect.left = static_cast<int32_t>(key.x * tileSize * scale);
+	rect.top = static_cast<int32_t>(key.y * tileSize * scale);
+	rect.right = rect.left + static_cast<int32_t>(tileSize * scale);
+	rect.bottom = rect.top + static_cast<int32_t>(tileSize * scale);
 
 	return rect;
 }
@@ -586,14 +560,10 @@ ID3D11ShaderResourceView* TileManager::GetPoolSRV(uint32_t lodLevel)
 	if (m_pools.size() <= lodLevel)
 		return nullptr;
 
-	return m_pools[lodLevel]->GetSrvArray();
+	return m_pools[lodLevel] ? m_pools[lodLevel]->GetSrvArray() : nullptr;
 }
 
 bool TileManager::HasPendingUploads() const
 {
 	return m_hasPendingUploads;
 }
-
-
-
-

@@ -1,31 +1,27 @@
 #include "pch.h"
 #include "TilePool.h"
 
-TilePool::TilePool(ID3D11Device* device, uint32_t tileSize, uint32_t capacity, UploadMode mode)
+TilePool::TilePool(ID3D11Device* device, uint32_t tileSize, uint32_t capacity, DXGI_FORMAT format)
 	: m_device(device)
-	, m_uploadMode(mode)
+	, m_format(format)
 {
+	if (capacity == 0)
+		return;
+
 	D3D11_TEXTURE2D_DESC textureDesc{};
 	textureDesc.Width = tileSize;
 	textureDesc.Height = tileSize;
 	textureDesc.MipLevels = 1;
 	textureDesc.ArraySize = capacity;
-	textureDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	textureDesc.Format = format;
 	textureDesc.SampleDesc.Count = 1;
 	textureDesc.Usage = D3D11_USAGE_DEFAULT;
-	textureDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-	if (m_uploadMode == UploadMode::OnlyCPU)
-	{
-		// Map/Unmap에 최적화된 설정
-		textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	}
-	else if (m_uploadMode == UploadMode::Hybrid)
-	{
-		// Compute Shader 가속에 최적화된 설정
-		
-		textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-	}
+	// UpdateSubresource 로만 채운다. 컴퓨트 셰이더 경로를 폐지했으므로
+	// UAV 바인딩이 필요 없고, 그 덕에 R8/R16 의 typed UAV store 지원 여부를
+	// 신경 쓰지 않아도 된다.
+	textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	textureDesc.CPUAccessFlags = 0;
 
 	HRESULT hr = device->CreateTexture2D(&textureDesc, nullptr, &m_textureArray);
 	if (FAILED(hr))
@@ -34,20 +30,6 @@ TilePool::TilePool(ID3D11Device* device, uint32_t tileSize, uint32_t capacity, U
 	hr = device->CreateShaderResourceView(m_textureArray, nullptr, &m_srvArray);
 	if (FAILED(hr))
 		return;
-
-	if (m_uploadMode == UploadMode::Hybrid)
-	{
-		D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
-		uavDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-		uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
-		uavDesc.Texture2DArray.ArraySize = capacity;
-		uavDesc.Texture2DArray.FirstArraySlice = 0;
-		uavDesc.Texture2DArray.MipSlice = 0;
-
-		hr = m_device->CreateUnorderedAccessView(m_textureArray, &uavDesc, &m_uavArray);
-		if (FAILED(hr))
-			return;
-	}
 
 	m_storage.reserve(capacity);
 	for (uint32_t i = 0; i < capacity; i++)
@@ -66,7 +48,6 @@ TilePool::~TilePool()
 {
 	SafeRelease(m_srvArray);
 	SafeRelease(m_textureArray);
-	SafeRelease(m_uavArray);
 
 	m_storage.clear();
 }
@@ -79,11 +60,6 @@ ID3D11Texture2D* TilePool::GetTextureArray()
 ID3D11ShaderResourceView* TilePool::GetSrvArray()
 {
 	return m_srvArray;
-}
-
-ID3D11UnorderedAccessView* TilePool::GetUavArray()
-{
-	return m_uavArray;
 }
 
 Tile* TilePool::Acquire(const TileKey& key, uint64_t frameID)
@@ -112,12 +88,20 @@ void TilePool::Evict(uint64_t frameID, uint64_t frameThreshold)
 	while (it != m_usedList.rend())
 	{
 		Tile* tile = *it;
-		if (frameID - tile->lastFrameUsed < frameThreshold)
+
+		// frameID 가 아직 threshold 만큼 진행되지 않았으면 언더플로가 나므로 먼저 막는다.
+		if (frameID < frameThreshold)
+			break;
+
+		if (tile->lastFrameUsed > (frameID - frameThreshold))
 			break;
 
 		auto eraseIt = std::next(it).base();
 		m_lookup.erase(tile->key);
 		m_usedList.erase(eraseIt);
+
+		tile->state = TileState::None;
+		tile->key = TileKey{};
 		m_freeList.push_back(tile);
 
 		it = m_usedList.rbegin();
@@ -163,7 +147,7 @@ Tile* TilePool::AllocateNew(const TileKey& key, uint64_t frameID)
 	}
 	else
 	{
-		tile = EvictLRU();
+		tile = EvictLRU(frameID);
 	}
 
 	if (!tile)
@@ -182,17 +166,27 @@ Tile* TilePool::AllocateNew(const TileKey& key, uint64_t frameID)
 	return tile;
 }
 
-Tile* TilePool::EvictLRU()
+Tile* TilePool::EvictLRU(uint64_t frameID)
 {
-	if (m_usedList.empty())
+	// 이번 프레임에 이미 사용된 타일은 렌더 리스트에 들어가 있을 수 있으므로
+	// 절대 빼앗지 않는다. 예전 구현은 m_usedList.back() 을 무조건 가져갔고,
+	// TileManager 가 이전 프레임 타일들의 lastFrameUsed 를 갱신하면서
+	// usedList 순서와 어긋나 현재 프레임 가시 타일이 축출될 수 있었다.
+	for (auto it = m_usedList.rbegin(); it != m_usedList.rend(); ++it)
 	{
-		return nullptr; // 뺏어올 타일이 없음
+		Tile* tile = *it;
+
+		if (tile->lastFrameUsed == frameID)
+			continue;
+
+		auto eraseIt = std::next(it).base();
+		m_lookup.erase(tile->key);
+		m_usedList.erase(eraseIt);
+
+		return tile;
 	}
 
-	Tile* tile = m_usedList.back();
-
-	m_lookup.erase(tile->key);
-	m_usedList.pop_back();
-
-	return tile;
+	// 전부 이번 프레임에 쓰이는 중이라면 용량이 부족한 것이다.
+	// (용량 공식이 맞다면 여기 도달하지 않는다.)
+	return nullptr;
 }

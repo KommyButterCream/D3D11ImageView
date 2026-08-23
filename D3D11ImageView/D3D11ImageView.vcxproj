@@ -51,8 +51,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Image Tile\Tile.h" />
+    <ClInclude Include="..\Image Tile\TileFormat.h" />
     <ClInclude Include="..\Image Tile\TileManager.h" />
     <ClInclude Include="..\Image Tile\TilePool.h" />
+    <ClInclude Include="..\Image Tile\TileSampler.h" />
     <ClInclude Include="..\Overlay Renderer\IOverlayObject.h" />
     <ClInclude Include="..\Overlay Renderer\OverlayEllipseRenderer.h" />
     <ClInclude Include="..\Overlay Renderer\OverlayLineRenderer.h" />

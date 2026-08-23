@@ -2,6 +2,7 @@
 #include "D3D11ImageView_Impl.h"
 #include "../Render Layer/ImageRenderLayer.h"
 #include "../Render Layer/UIRenderLayer.h"
+#include "../Image Tile/TileManager.h"
 
 using namespace Core::ShapeType;
 using namespace Core::ImageType;
@@ -94,6 +95,35 @@ bool D3D11ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 	InvalidateFrame();
 
 	return true;
+}
+
+void D3D11ImageView_Impl::DetachImage()
+{
+	if (!m_imageLayer)
+		return;
+
+	// 렌더 스레드가 Render() 안에 있으면 끝날 때까지 기다린다.
+	// (Render 도 같은 락을 잡으므로, 여기를 통과하면 프레임 밖임이 보장된다)
+	::AcquireSRWLockExclusive(&m_renderLock);
+
+	// 아직 적용되지 않은 대기 업데이트도 버린다. 그 안의 rawData 도
+	// 호출자 버퍼를 가리키고 있을 수 있다.
+	::AcquireSRWLockExclusive(&m_pendingImageLock);
+	if (m_pendingImageUpdate.texture)
+	{
+		m_pendingImageUpdate.texture->Release();
+	}
+	m_pendingImageUpdate.texture = nullptr;
+	m_pendingImageUpdate.Reset();
+	m_hasPendingImageUpdate = false;
+	::ReleaseSRWLockExclusive(&m_pendingImageLock);
+
+	// 풀 해제 + ImageBase 참조 해제
+	m_imageLayer->DetachImage();
+
+	::ReleaseSRWLockExclusive(&m_renderLock);
+
+	InvalidateFrame();
 }
 
 bool D3D11ImageView_Impl::ApplyPendingImageUpdate()

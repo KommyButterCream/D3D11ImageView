@@ -6,12 +6,6 @@
 #include <functional>
 #include <cassert>
 
-enum class UploadMode
-{
-	Hybrid,
-	OnlyCPU,
-};
-
 struct TileKey
 {
 	uint16_t lod = 0;
@@ -48,10 +42,8 @@ struct ID3D11ShaderResourceView;
 
 enum class TileState
 {
-	None,       // 초기 상태
-	Ready,      // 데이터가 업로드되어 즉시 사용 가능
-	Inactive,   // 가시 범위 밖
-	Active      // 현재 렌더링 중
+	None,       // 슬롯만 할당됨. 데이터 없음
+	Resident,   // 텍스처에 데이터가 올라감. 렌더 및 부모 fallback 가능
 };
 
 struct Tile

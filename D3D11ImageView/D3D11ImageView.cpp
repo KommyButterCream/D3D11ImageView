@@ -570,3 +570,10 @@ bool D3D11ImageView::UpdateSharedTexture(HANDLE sharedHandle)
 		return false;
 	}
 }
+void D3D11ImageView::DetachImage()
+{
+	if (m_impl)
+	{
+		m_impl->DetachImage();
+	}
+}

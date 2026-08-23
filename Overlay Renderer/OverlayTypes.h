@@ -32,8 +32,6 @@ struct OverlayStyle
 
 	void UpdateD2DColors() noexcept
 	{
-		constexpr float inv = 1.0f / 255.0f;
-
 		fillColorD2D = fillColor.ToD2DColor();
 		strokeColorD2D = strokeColor.ToD2DColor();
 	}

@@ -110,17 +110,6 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 
 	m_camera->SetViewSize(clientWidth, clientHeight);
 
-	TileSystemDesc tileSystemDesc;
-	tileSystemDesc.maxLOD = 4;
-	tileSystemDesc.lods =
-	{
-		{512, 2 * 100}, // LOD 0 (highest resolution)
-		{512, 2 * 50},  // LOD 1
-		{512, 2 * 25},  // LOD 2
-		{512, 2 * 15},  // LOD 3
-		{512, 2 * 10},  // LOD 4 (lowest resolution)
-	};
-
 	// Rendering Engine
 	if (D3D11Engine)
 	{
@@ -151,9 +140,9 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	if (!m_renderContext->Initialize(m_hWnd))
 		return failInitialize();
 
-	// Image Tile Manager 
+	// Image Tile Manager
 	m_tileManager = std::make_unique<TileManager>();
-	m_tileManager->Initialize(m_renderEngine->GetD3DDevice(), m_renderEngine->GetD3DDeviceContext(), tileSystemDesc);
+	m_tileManager->Initialize(m_renderEngine->GetD3DDevice(), m_renderEngine->GetD3DDeviceContext());
 
 	// Render Image Layer
 	m_imageLayer = std::make_unique<ImageRenderLayer>();

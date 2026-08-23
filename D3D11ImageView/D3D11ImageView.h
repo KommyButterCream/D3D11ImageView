@@ -148,6 +148,18 @@ public:
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
+	// UpdateImage 로 넘긴 원본 버퍼 참조를 끊는다.
+	//
+	// 뷰어는 그 포인터를 복사하지 않고 빌려 쓰며, 렌더 스레드와 타일 워커
+	// 스레드가 비동기로 읽는다. 따라서 호출자가 버퍼를 해제(또는 재할당)하기
+	// 전에 반드시 이 함수를 호출해야 use-after-free 를 피할 수 있다.
+	// 반환 시점 이후로 뷰어는 그 메모리를 읽지 않는다.
+	//
+	// 새 이미지로 교체만 할 경우에는 필요 없다. UpdateImage 가 내부적으로
+	// 워커를 배수한 뒤 포인터를 바꾼다. 단, 이전 버퍼를 해제하려면
+	// 교체 후에도 이 함수가 필요하다.
+	void DetachImage();
+
 private:
 	D3D11ImageView_Impl* m_impl = nullptr;
 };

@@ -194,6 +194,9 @@ public:
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
+	// Attach 된 원본 버퍼 참조를 끊는다. 자세한 계약은 D3D11ImageView.h 참조.
+	void DetachImage();
+
 public:
 	virtual LRESULT WndProc(UINT message, WPARAM wParam, LPARAM lParam) override;
 

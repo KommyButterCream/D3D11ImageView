@@ -190,5 +190,11 @@
     <ClInclude Include="RenderThread.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="..\Image Tile\TileFormat.h">
+      <Filter>Image Tile</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Image Tile\TileSampler.h">
+      <Filter>Image Tile</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

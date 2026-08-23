@@ -13,6 +13,8 @@
 #include "../Image Tile/Tile.h"
 #include "../Image Tile/TileManager.h"
 
+#include <algorithm>
+
 static const uint16_t kQuadIndices[] = { 0,1,2, 0,2,3 };
 
 ImageRenderLayer::ImageRenderLayer()
@@ -90,12 +92,33 @@ bool ImageRenderLayer::Render()
 
 	if (GetRenderMode() == RenderMode::Tiled)
 	{
-		if (!m_image->IsEmpty())
+		if (!m_image->IsEmpty() && m_tileManager)
 		{
+			// 뷰포트가 크게 바뀌면 작업세트와 maxLOD 가 달라지므로 재구성한다.
+			const uint32_t viewWidth = m_context->GetWidth();
+			const uint32_t viewHeight = m_context->GetHeight();
+
+			if (viewWidth > 0 && viewHeight > 0 &&
+				m_tileManager->NeedsReconfigure(viewWidth, viewHeight))
+			{
+				if (m_tileManager->Configure(m_image->Width(), m_image->Height(),
+					m_image->Channel(), 8, viewWidth, viewHeight))
+				{
+					m_tileManager->PrimeCoarsestLevel(m_image->ImageBuffer(),
+						m_image->Width(), m_image->Stride(), m_image->Height(), m_image->Channel());
+				}
+			}
+
 			const Core::ShapeType::Rect2i rect = m_camera->GetViewImageRect();
 
+			// 모션 게이팅: 카메라가 움직이는 중이면 새 타일을 만들지 않고
+			// 상주분(부모 fallback 포함)으로만 그린다. 드래그 중 스치는 타일은
+			// 업로드가 끝나기도 전에 화면을 벗어나므로 그 비용이 낭비다.
+			const bool cameraSettled = m_camera->IsSettled();
+
 			m_tileManager->UpdateVisibleTiles(rect, m_camera->GetZoom(), m_frameID,
-				m_image->ImageBuffer(), m_image->Width(), m_image->Stride(), m_image->Height(), m_image->Channel());
+				m_image->ImageBuffer(), m_image->Width(), m_image->Stride(), m_image->Height(), m_image->Channel(),
+				cameraSettled);
 		}
 	}
 
@@ -199,13 +222,10 @@ void ImageRenderLayer::SetFrameID(uint64_t frameID)
 
 bool ImageRenderLayer::IsImageRenderDirty() const
 {
-	bool isDirty = false;
-	if (m_tileManager->HasPendingUploads())
-	{
-		isDirty = true;
-	}
+	if (m_currentMode != RenderMode::Tiled || !m_tileManager)
+		return false;
 
-	return isDirty;
+	return m_tileManager->HasPendingUploads();
 }
 
 bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
@@ -213,42 +233,146 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 	if (!data || width == 0 || height == 0 || stride == 0)
 		return false;
 
-	RenderMode newMode = RenderMode::Single;
+	if (channel != 1 && channel != 3 && channel != 4)
+		return false;
 
-	if (width > 8192 || height > 8192)
+	// 현재는 8bit 소스만 들어온다(ImageBase::Attach 에 8 을 넘김).
+	// 16bit Gray 를 받게 되면 이 값만 바꾸면 R16_UNORM 경로가 살아난다.
+	constexpr uint32_t kSourceBitDepth = 8;
+
+	const DXGI_FORMAT format = TileFormat::ResolveTextureFormat(channel, kSourceBitDepth);
+
+	// Single(전량 상주) 가능 여부.
+	//   1) 변 단위 하드 한계(16384)
+	//   2) 밉 포함 상주 예산
+	// D3D11 에는 부분 상주 텍스처가 없으므로, 예산을 넘으면 타일링으로 간다.
+	const bool preferSingle =
+		TileFormat::CanUseSingleTexture(width, height, format, m_concurrentViewCount);
+
+	// 3채널만 컴퓨트 셰이더 확장이 필요하다.
+	// (D3D11 에 24bit 텍스처 포맷이 아예 없어 저장 자체가 불가능하므로,
+	//  텍스처가 되기 전에 4바이트로 펴야 한다)
+	const bool needsComputeUpload = TileFormat::NeedsChannelExpansion(channel);
+
+	RenderMode newMode = RenderMode::Tiled;
+
+	if (preferSingle && CreateSingleBuffer(width, height, format, needsComputeUpload))
 	{
-		newMode = RenderMode::Tiled;
+		newMode = RenderMode::Single;
 
-		if (m_tileManager)
+		if (channel == 1 || channel == 4)
 		{
-			m_tileManager->ClearPools();
-		}
-	}
-	else
-	{
-		if (!CreateSingleBuffer(width, height))
-			return false;
-
-		if (channel == 4)
-		{
+			// 포맷이 소스와 일치하므로 변환 없이 그대로 올린다.
+			// (Gray 는 R8_UNORM 이라 예전의 4바이트 확장이 불필요해졌다.)
 			m_contextD3D->UpdateSubresource(m_singleTexture, 0, nullptr, data, stride, 0);
 		}
-		else if (channel == 1 || channel == 3)
+		else
 		{
+			// BGR 24bit 만 확장이 필요하다. 이미지 전체를 한 번에 변환하는
+			// 큰 병렬 작업이라 컴퓨트 셰이더가 맞는 도구다.
+			if (!CreateRawUploadBuffer(width * height * channel))
+				return false;
+
 			UploadSingleImage_GPU(data, width, height, stride, channel);
 		}
+
+		GenerateSingleMips();
 	}
+
+	if (newMode == RenderMode::Tiled)
+	{
+		if (!m_tileManager)
+			return false;
+
+		uint32_t viewWidth = m_context ? m_context->GetWidth() : 0;
+		uint32_t viewHeight = m_context ? m_context->GetHeight() : 0;
+		if (viewWidth == 0 || viewHeight == 0)
+		{
+			viewWidth = 1920;
+			viewHeight = 1080;
+		}
+
+		// maxLOD / 용량 / 포맷이 모두 이미지 의존이므로 여기서 풀을 재구성한다.
+		if (!m_tileManager->Configure(width, height, channel, kSourceBitDepth, viewWidth, viewHeight))
+			return false;
+
+		// 가장 거친 LOD 전체를 먼저 채운다. 이게 끝나기 전에는 이미지를 그리지
+		// 않으므로 타일이 하나씩 나타나는 과정이 보이지 않고, 끝난 뒤에는
+		// 부모 fallback 이 항상 성공해 화면에 구멍이 생기지 않는다.
+		m_tileManager->PrimeCoarsestLevel(data, width, stride, height, channel);
+	}
+
+	// 모드가 바뀌면 반대쪽 리소스를 놓아준다.
+	// 그러지 않으면 두 경로가 동시에 상주해 피크 VRAM 이 두 배가 된다.
+	ReleaseUnusedModeResources(newMode);
 
 	// Update image metadata and buffer ownership.
 	if (m_image)
 	{
-		m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, 8);
+		m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, kSourceBitDepth);
 	}
 
 	// Update camera state only when the image source or size changes.
 	UpdateImageState(ImageInputSource::RawImage, width, height, newMode, channel);
 
 	return true;
+}
+
+void ImageRenderLayer::DetachImage()
+{
+	// 풀을 먼저 해제해 이후 프레임이 원본을 다시 읽지 않게 한 뒤,
+	// ImageBase 의 참조를 끊는다.
+	if (m_tileManager)
+	{
+		m_tileManager->ReleasePools();
+	}
+
+	if (m_image)
+	{
+		m_image->ReleaseBuffer();
+	}
+
+	// Single 텍스처는 이미 GPU 사본이라 원본과 무관하므로 유지해도 되지만,
+	// Detach 의 의미상 화면을 비우는 쪽이 예측 가능하다.
+	SafeRelease(m_singleSRV);
+	SafeRelease(m_singleUAV);
+	SafeRelease(m_singleTexture);
+	SafeRelease(m_rawUploadSRV);
+	SafeRelease(m_rawUploadBuffer);
+
+	m_singleTextureWidth = 0;
+	m_singleTextureHeight = 0;
+	m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+	m_maxByteSize = 0;
+
+	m_inputSource = ImageInputSource::None;
+	m_inputChannel = 0;
+	m_texWidth = 0;
+	m_texHeight = 0;
+	m_renderVertices.clear();
+}
+
+// 사용하지 않는 렌더 경로의 GPU 리소스를 해제한다.
+void ImageRenderLayer::ReleaseUnusedModeResources(RenderMode activeMode)
+{
+	if (activeMode == RenderMode::Single)
+	{
+		if (m_tileManager)
+			m_tileManager->ReleasePools();
+	}
+	else
+	{
+		SafeRelease(m_singleSRV);
+		SafeRelease(m_singleUAV);
+		SafeRelease(m_singleTexture);
+		SafeRelease(m_rawUploadSRV);
+		SafeRelease(m_rawUploadBuffer);
+
+		m_singleTextureWidth = 0;
+		m_singleTextureHeight = 0;
+		m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+		m_maxByteSize = 0;
+	}
 }
 
 bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height)
@@ -259,7 +383,7 @@ bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, 
 	D3D11_TEXTURE2D_DESC desc = {};
 	texture->GetDesc(&desc);
 
-	if (desc.Width == 0 || desc.Height == 0 || desc.Width > 8192 || desc.Height > 8192)
+	if (desc.Width == 0 || desc.Height == 0 || desc.Width > TileFormat::kMaxTextureDim || desc.Height > TileFormat::kMaxTextureDim)
 		return false;
 
 	ID3D11Device* sourceDevice = nullptr;
@@ -272,10 +396,12 @@ bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, 
 	width = desc.Width;
 	height = desc.Height;
 
-	if (!CreateSingleBuffer(width, height))
+	// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
+	if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, false))
 		return false;
 
 	m_contextD3D->CopyResource(m_singleTexture, texture);
+	GenerateSingleMips();
 
 	if (m_image)
 	{
@@ -298,16 +424,18 @@ bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width,
 	D3D11_TEXTURE2D_DESC desc = {};
 	m_sharedTexture->GetDesc(&desc);
 
-	if (desc.Width == 0 || desc.Height == 0 || desc.Width > 8192 || desc.Height > 8192)
+	if (desc.Width == 0 || desc.Height == 0 || desc.Width > TileFormat::kMaxTextureDim || desc.Height > TileFormat::kMaxTextureDim)
 		return false;
 
 	width = desc.Width;
 	height = desc.Height;
 
-	if (!CreateSingleBuffer(width, height))
+	// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
+	if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, false))
 		return false;
 
 	m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
+	GenerateSingleMips();
 
 
 	// Shared texture updates do not own CPU image memory.
@@ -368,7 +496,6 @@ bool ImageRenderLayer::CreateDeviceResources()
 	if (!CreateConstantBuffer()) goto FAIL;
 	if (!CreateRasterizerState()) goto FAIL;
 	if (!CreateTileDynamicBuffer(128)) goto FAIL;
-	if (!CreateRawUploadBuffer(8192 * 8192 * 4)) goto FAIL;
 
 	return true;
 
@@ -379,7 +506,8 @@ FAIL:
 
 void ImageRenderLayer::ReleaseDeviceResources()
 {
-	SafeRelease(m_sampler);
+	SafeRelease(m_samplerPoint);
+	SafeRelease(m_samplerLinearMip);
 
 	SafeRelease(m_constantBuffer);
 	SafeRelease(m_wireColorBuffer);
@@ -395,6 +523,7 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_inputLayout);
 	SafeRelease(m_vs);
 	SafeRelease(m_ps);
+	SafeRelease(m_grayPS);
 	SafeRelease(m_wirePS);
 
 	SafeRelease(m_singleSRV);
@@ -405,6 +534,11 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_singleConvertCB);
 
 	SafeRelease(m_sharedTexture);
+
+	// 지연 생성 리소스의 크기 추적값을 리셋해야 재생성 시 다시 잡힌다.
+	m_singleTextureWidth = 0;
+	m_singleTextureHeight = 0;
+	m_maxByteSize = 0;
 }
 
 bool ImageRenderLayer::CreateShaders()
@@ -464,6 +598,42 @@ bool ImageRenderLayer::CreateShaders()
 		SafeRelease(errorBlob);
 		SafeRelease(wirePSBlob);
 		return false;
+	}
+
+	// 단일 채널(R8/R16) 소스용 픽셀 셰이더.
+	// 1채널 텍스처를 그대로 쓰고 3채널 복제를 셰이더에서 처리하므로
+	// 업로드 시점의 4바이트 확장이 불필요해진다.
+	{
+		ID3DBlob* grayPSBlob = nullptr;
+		hr = ::D3DReadFileToBlob(L"../Shaders/ImageGrayPS.cso", &grayPSBlob);
+
+		if (FAILED(hr))
+		{
+			SafeRelease(vsBlob);
+			SafeRelease(psBlob);
+			SafeRelease(wirePSBlob);
+			SafeRelease(errorBlob);
+			SafeRelease(grayPSBlob);
+			return false;
+		}
+
+		hr = m_device->CreatePixelShader(
+			grayPSBlob->GetBufferPointer(),
+			grayPSBlob->GetBufferSize(),
+			nullptr,
+			&m_grayPS
+		);
+
+		SafeRelease(grayPSBlob);
+
+		if (FAILED(hr))
+		{
+			SafeRelease(vsBlob);
+			SafeRelease(psBlob);
+			SafeRelease(wirePSBlob);
+			SafeRelease(errorBlob);
+			return false;
+		}
 	}
 
 	hr = ::D3DReadFileToBlob(L"../Shaders/SingleConvertCS.cso", &csBlob);
@@ -599,8 +769,6 @@ bool ImageRenderLayer::CreateGeometry(uint32_t tileWidth, uint32_t tileHeight)
 bool ImageRenderLayer::CreateSampler()
 {
 	D3D11_SAMPLER_DESC sd = {};
-	//sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
 	sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
 	sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
 	sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -608,7 +776,16 @@ bool ImageRenderLayer::CreateSampler()
 	sd.MinLOD = 0.0;
 	sd.MaxLOD = D3D11_FLOAT32_MAX;
 
-	HRESULT hr = m_device->CreateSamplerState(&sd, &m_sampler);
+	// Tiled 전용: 타일 경계 이음새를 피하기 위해 POINT 유지.
+	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
+	HRESULT hr = m_device->CreateSamplerState(&sd, &m_samplerPoint);
+	if (FAILED(hr))
+		return false;
+
+	// Single 전용: 축소는 LINEAR + 밉 보간(에일리어싱/지글거림 제거),
+	// 확대는 POINT(검사용으로 픽셀 경계를 흐리지 않음).
+	sd.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
+	hr = m_device->CreateSamplerState(&sd, &m_samplerLinearMip);
 
 	return SUCCEEDED(hr);
 }
@@ -650,24 +827,44 @@ bool ImageRenderLayer::CreateTileDynamicBuffer(uint32_t maxTileCount)
 	return SUCCEEDED(m_device->CreateBuffer(&bd, nullptr, &m_tileVertexBuffer));
 }
 
-bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height)
+bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format, bool needsComputeUpload)
 {
-	if (m_singleTexture && m_singleTextureWidth == width && m_singleTextureHeight == height)
+	// UAV 유무까지 일치해야 재사용할 수 있다.
+	// (같은 BGRA 라도 3채널 소스는 UAV 가 필요하고 4채널은 아니다)
+	const bool hasUAV = (m_singleUAV != nullptr);
+
+	if (m_singleTexture &&
+		m_singleTextureWidth == width &&
+		m_singleTextureHeight == height &&
+		m_singleTextureFormat == format &&
+		hasUAV == needsComputeUpload)
+	{
 		return true;
+	}
 
 	// Release existing single-texture resources.
 	SafeRelease(m_singleSRV);
+	SafeRelease(m_singleUAV);
 	SafeRelease(m_singleTexture);
 
 	D3D11_TEXTURE2D_DESC desc = {};
 	desc.Width = width;
 	desc.Height = height;
-	desc.MipLevels = 1;
+	desc.MipLevels = 0;  // 0 = 전체 밉 체인 자동 생성 (축소 시 에일리어싱 제거)
 	desc.ArraySize = 1;
-	desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM; // final output format is BGRA
+	// 소스 채널에 맞춘 포맷. Gray 는 R8/R16 이라 BGRA 대비 VRAM 이 1/4~1/2 다.
+	desc.Format = format;
 	desc.SampleDesc.Count = 1;
 	desc.Usage = D3D11_USAGE_DEFAULT; // GPU resource used as a copy/render target
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+	// GENERATE_MIPS 는 BIND_RENDER_TARGET | BIND_SHADER_RESOURCE 를 함께 요구한다.
+	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+	// BGR 24bit 확장은 컴퓨트 셰이더가 UAV 로 mip 0 에 쓴다.
+	// 그 외(1채널 R8/R16, 4채널 BGRA)는 포맷이 소스와 일치해
+	// UpdateSubresource 로 직행하므로 UAV 가 필요 없다.
+	if (needsComputeUpload)
+		desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 
 	HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_singleTexture);
 	if (FAILED(hr))
@@ -677,26 +874,51 @@ bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height)
 	if (FAILED(hr))
 		return false;
 
-	hr = m_device->CreateUnorderedAccessView(m_singleTexture, nullptr, &m_singleUAV);
-	if (FAILED(hr))
-		return false;
+	if (needsComputeUpload)
+	{
+		// 밉 체인이 생겼으므로 UAV 는 mip 0 만 명시적으로 지정한다.
+		// (컴퓨트 셰이더는 mip 0 에만 쓰고, 나머지는 GenerateMips 가 채운다.)
+		D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.Format = format;
+		uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+		uavDesc.Texture2D.MipSlice = 0;
+
+		hr = m_device->CreateUnorderedAccessView(m_singleTexture, &uavDesc, &m_singleUAV);
+		if (FAILED(hr))
+			return false;
+	}
 
 	m_singleTextureWidth = width;
 	m_singleTextureHeight = height;
+	m_singleTextureFormat = format;
 
 	return true;
 }
 
+// mip 0 업로드가 끝난 뒤 나머지 밉 레벨을 GPU 하드웨어로 생성한다.
+// 반드시 UAV 언바인딩 이후에 호출해야 한다(리소스 해저드).
+void ImageRenderLayer::GenerateSingleMips()
+{
+	if (m_contextD3D && m_singleSRV)
+	{
+		m_contextD3D->GenerateMips(m_singleSRV);
+	}
+}
+
 bool ImageRenderLayer::CreateRawUploadBuffer(uint32_t maxByteSize)
 {
-	if (m_maxByteSize == maxByteSize)
+	// 이미 충분히 크면 재생성하지 않는다(축소는 하지 않음).
+	if (m_rawUploadBuffer && m_maxByteSize >= maxByteSize)
 		return true;
 
 	SafeRelease(m_rawUploadSRV);
 	SafeRelease(m_rawUploadBuffer);
 
 	D3D11_BUFFER_DESC desc = {};
-	desc.ByteWidth = maxByteSize; // enough space for large raw image uploads
+	// RAW SRV 는 4바이트 단위이므로 4의 배수로 올림한다.
+	maxByteSize = (maxByteSize + 3u) & ~3u;
+
+	desc.ByteWidth = maxByteSize;
 	desc.Usage = D3D11_USAGE_DYNAMIC; // dynamic buffer for Map/Unmap uploads
 	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
@@ -715,8 +937,14 @@ bool ImageRenderLayer::CreateRawUploadBuffer(uint32_t maxByteSize)
 	srvDesc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW; // RAW view flag
 
 	hr = m_device->CreateShaderResourceView(m_rawUploadBuffer, &srvDesc, &m_rawUploadSRV);
+	if (FAILED(hr))
+		return false;
 
-	return SUCCEEDED(hr);
+	// 이전에는 대입되지 않아 위쪽 early-return 이 동작하지 않았고,
+	// 매 업로드마다 버퍼를 재생성하고 있었다.
+	m_maxByteSize = maxByteSize;
+
+	return true;
 }
 
 bool ImageRenderLayer::OpenSharedResource(HANDLE sharedHandle)
@@ -789,21 +1017,32 @@ void ImageRenderLayer::UploadSingleImage_GPU(const uint8_t* data, uint32_t width
 	if (SUCCEEDED(m_contextD3D->Map(m_rawUploadBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
 	{
 		uint8_t* dst = reinterpret_cast<uint8_t*>(mapped.pData);
+		const size_t packedRow = static_cast<size_t>(width) * channel;
 
-		if (stride == width * channel)
-		{
-			memcpy(dst, data, height * stride);
-		}
-		else
-		{
-			// Copy line by line when source stride differs from packed width.
-			for (uint32_t y = 0; y < height; ++y)
+		// mapped 포인터는 보통 Write-Combine 메모리다.
+		//   - 순차 쓰기는 빠르고, 읽기는 재앙적으로 느리다(절대 읽지 않는다)
+		//   - WC 쓰기는 코어 1개의 WC 버퍼 수에 묶이므로 여러 스레드가
+		//     PCIe 를 더 잘 채운다 -> 행 범위를 나눠 병렬 memcpy 한다
+		//
+		// Map/Unmap 이 렌더 스레드에 묶여 있어 지속 큐가 아니라 fork-join 이다.
+		// 호출 스레드도 청크를 처리하므로 워커가 0개여도 동작한다.
+		const auto copyRows = [dst, data, packedRow, stride](uint32_t beginRow, uint32_t endRow)
 			{
-				memcpy(dst + (y * width * channel),
-					data + y * stride,
-					width * channel);
-			}
-		}
+				for (uint32_t y = beginRow; y < endRow; ++y)
+				{
+					memcpy(dst + static_cast<size_t>(y) * packedRow,
+						data + static_cast<size_t>(y) * stride,
+						packedRow);
+				}
+			};
+
+		// 청크가 너무 작으면 동기화 비용이 이득을 넘는다.
+		// 대략 512KB 이상이 되도록 최소 행 수를 잡는다.
+		constexpr size_t kMinChunkBytes = 512u * 1024u;
+		const uint32_t minRows = static_cast<uint32_t>(
+			(std::max)(size_t(1), kMinChunkBytes / (std::max)(size_t(1), packedRow)));
+
+		copyRows(0, height);
 
 		m_contextD3D->Unmap(m_rawUploadBuffer, 0);
 	}
@@ -838,6 +1077,15 @@ void ImageRenderLayer::UploadSingleImage_GPU(const uint8_t* data, uint32_t width
 
 bool ImageRenderLayer::RenderTiled()
 {
+	if (!m_tileManager)
+		return true;
+
+	// 가장 거친 LOD 프라이밍이 끝나기 전에는 이미지를 그리지 않는다.
+	// 타일이 하나씩 채워지는 과정을 노출하지 않고, 준비되면 한 번에 나타난다.
+	// (GLViewer_2DEngine 이 캐시 미준비 시 SwapBuffers 를 생략하는 것과 같은 효과)
+	if (!m_tileManager->IsPrimed())
+		return true;
+
 	const auto& renderDataList = m_tileManager->GetRenderDataList();
 	if (renderDataList.empty()) return true;
 
@@ -963,8 +1211,22 @@ void ImageRenderLayer::SetCommonShaderStates()
 	m_contextD3D->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	m_contextD3D->VSSetShader(m_vs, nullptr, 0);
 	m_contextD3D->RSSetState(m_rasterizerSolid);
-	m_contextD3D->PSSetShader(m_ps, nullptr, 0);
-	m_contextD3D->PSSetSamplers(0, 1, &m_sampler);
+
+	// 단일 채널(R8/R16) 텍스처는 Sample() 이 (r,0,0,1) 을 주므로
+	// .r 을 3채널로 복제하는 전용 픽셀 셰이더를 쓴다.
+	const DXGI_FORMAT activeFormat = (m_currentMode == RenderMode::Single)
+		? m_singleTextureFormat
+		: (m_tileManager ? m_tileManager->GetFormat() : DXGI_FORMAT_B8G8R8A8_UNORM);
+
+	ID3D11PixelShader* pixelShader =
+		TileFormat::IsSingleChannel(activeFormat) ? m_grayPS : m_ps;
+	m_contextD3D->PSSetShader(pixelShader, nullptr, 0);
+
+	// Single 은 밉 체인이 있어 LINEAR 축소가 가능하지만, Tiled 는 타일 경계
+	// 이음새 때문에 POINT 를 유지해야 한다.
+	ID3D11SamplerState* sampler =
+		(m_currentMode == RenderMode::Single) ? m_samplerLinearMip : m_samplerPoint;
+	m_contextD3D->PSSetSamplers(0, 1, &sampler);
 }
 
 void ImageRenderLayer::UpdateVertexBuffer(const std::vector<GRAPHICS::BatchVertex>& vertices)
