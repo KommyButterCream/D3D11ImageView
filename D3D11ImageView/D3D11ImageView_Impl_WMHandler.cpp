@@ -130,6 +130,14 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 		return 0L;
 	}
 
+	// 호스트 콜백. UI 처리 뒤, ROI 처리 앞이라 m_roiLock 밖이므로
+	// 콜백에서 ROI API 를 불러도 데드락이 없다.
+	// true 를 반환하면 호스트가 처리했으므로 뷰어는 더 진행하지 않는다.
+	if (DispatchMouseEvent(MouseEventType::LButtonDown, mousePosition.x, mousePosition.y))
+	{
+		return 0L;
+	}
+
 	if (m_roiLayer && m_roiLayer->OnLButtonDown(static_cast<float>(mousePosition.x), static_cast<float>(mousePosition.y)))
 	{
 		m_mouseButtonMode = MouseButtonMode::LBUTTON_ROI_EDIT;
@@ -164,6 +172,11 @@ LRESULT D3D11ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
 
 	if (HandleMouseEventUI(UIMouseEventType::LButtonUp, mousePosition.x, mousePosition.y)
 		!= UIEventResult::None)
+	{
+		return 0L;
+	}
+
+	if (DispatchMouseEvent(MouseEventType::LButtonUp, mousePosition.x, mousePosition.y))
 	{
 		return 0L;
 	}
@@ -221,6 +234,11 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 	const UIEventResult uiEventResult = HandleMouseEventUI(UIMouseEventType::Move, mousePosition.x, mousePosition.y);
 
 	if (uiEventResult != UIEventResult::None)
+	{
+		return 0L;
+	}
+
+	if (DispatchMouseEvent(MouseEventType::Move, mousePosition.x, mousePosition.y))
 	{
 		return 0L;
 	}
@@ -353,6 +371,14 @@ LRESULT D3D11ImageView_Impl::OnMouseWheel(WPARAM wParam, LPARAM lParam)
 	::GetCursorPos(&mousePosition);
 	::ScreenToClient(m_hWnd, &mousePosition);
 
+	// 호스트가 휠을 선점하면 줌하지 않는다.
+	// (예: Ctrl+휠로 자체 기능을 넣는 경우)
+	if (DispatchMouseEvent(MouseEventType::Wheel,
+		mousePosition.x, mousePosition.y, static_cast<int32_t>(delta)))
+	{
+		return 0L;
+	}
+
 	int wheelStep = delta / WHEEL_DELTA;
 
 	float zoomSpeed = m_defaultZoomFactor;
@@ -398,6 +424,13 @@ LRESULT D3D11ImageView_Impl::OnRButtonDown(WPARAM wParam, LPARAM lParam)
 		!= UIEventResult::None)
 	{
 		//return 0L;
+	}
+
+	// 호스트가 우클릭을 선점하면 팬을 시작하지 않는다.
+	// (자체 컨텍스트 메뉴를 띄우는 경우)
+	if (DispatchMouseEvent(MouseEventType::RButtonDown, mousePosition.x, mousePosition.y))
+	{
+		return 0L;
 	}
 
 	m_rButtonDown = mousePosition;

@@ -27,6 +27,11 @@ bool ROIPolygonRenderer::UpdateDefinition(const wchar_t* name, const Polygon2f& 
 
 	m_name = name ? name : L"";
 	m_strokeColor = ROIUtilities::ConvertColor(rgb);
+
+	// 원본 COLORREF 를 따로 보관한다. D2D1_COLOR_F 에서 역변환하면
+	// 부동소수 반올림으로 원래 값이 그대로 돌아오지 않는다.
+	m_colorRGB = static_cast<uint32_t>(rgb);
+
 	m_isMovable = isMovable;
 	m_isResizable = isResizable;
 	m_fontSize = fontSize;
@@ -45,6 +50,46 @@ ROIObjectType ROIPolygonRenderer::GetObjectType() const
 const std::wstring& ROIPolygonRenderer::GetKey() const
 {
 	return m_key;
+}
+
+const std::wstring& ROIPolygonRenderer::GetName() const
+{
+	return m_name;
+}
+
+uint32_t ROIPolygonRenderer::GetColorRGB() const
+{
+	return m_colorRGB;
+}
+
+int32_t ROIPolygonRenderer::GetFontSize() const
+{
+	return static_cast<int32_t>(m_fontSize);
+}
+
+void ROIPolygonRenderer::GetShape(ROIShapeData& outShape) const
+{
+	outShape = {};
+	outShape.type = ROIObjectType::Polygon;
+	outShape.vertexCount = static_cast<uint32_t>(m_points.size());
+
+	// 다각형은 가변 길이라 union 에 담지 않는다. GetVertices 로 받는다.
+}
+
+uint32_t ROIPolygonRenderer::GetVertices(Core::ShapeType::Point2f* buffer,
+	uint32_t capacity, uint32_t /*segmentsPerCurve*/) const
+{
+	const uint32_t needed = static_cast<uint32_t>(m_points.size());
+
+	if (!buffer || capacity < needed)
+		return needed;
+
+	for (uint32_t i = 0; i < needed; ++i)
+	{
+		buffer[i] = m_points[i];
+	}
+
+	return needed;
 }
 
 const Rect2f& ROIPolygonRenderer::GetBounds() const

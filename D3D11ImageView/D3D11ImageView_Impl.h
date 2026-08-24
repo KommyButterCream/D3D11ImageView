@@ -32,6 +32,10 @@
 #include "../../../Module/Core/ShapeType/Polygon2f.h"
 #include "../../../Module/Core/ImageType/ImageBase.h"
 
+// ROIRenderLayer::ROIInfoData / ROIEventHandler, ROIShapeData 를 쓰므로
+// 전방선언으로는 부족하다.
+#include "../Render Layer/ROIRenderLayer.h"
+
 using Core::ImageType::ImageBase;
 using Core::ShapeType::Circle2d;
 using Core::ShapeType::Circle2f;
@@ -62,7 +66,6 @@ class ImageRenderLayer;
 class SelectionRectRenderLayer;
 
 class OverlayRenderLayer;
-class ROIRenderLayer;
 class UIRenderLayer;
 class ImageCenterRenderLayer;
 
@@ -199,6 +202,103 @@ public:
 	// Attach 된 원본 버퍼 참조를 끊는다. 자세한 계약은 D3D11ImageView.h 참조.
 	void DetachImage();
 
+	// ─────────────────────────────────────────────────────────────
+	// ROI 조회 / 이벤트  (D3D11ImageView_Impl_Query.cpp)
+	// ─────────────────────────────────────────────────────────────
+	uint32_t ROIGetCount() const;
+	bool ROIGetShape(const wchar_t* key, ROIShapeData& outShape) const;
+	uint32_t ROIGetVertices(const wchar_t* key, Point2f* buffer,
+		uint32_t capacity, uint32_t segmentsPerCurve) const;
+	bool ROIGetBounds(const wchar_t* key, Rect2f& outBounds) const;
+	bool ROIGetInfo(const wchar_t* key, ROIRenderLayer::ROIInfoData& outInfo) const;
+	uint32_t ROIGetName(const wchar_t* key, wchar_t* buffer, uint32_t bufferChars) const;
+	uint32_t ROIGetKeyAt(uint32_t index, wchar_t* buffer, uint32_t bufferChars) const;
+	uint32_t ROIGetSelectedKey(wchar_t* buffer, uint32_t bufferChars) const;
+	uint32_t ROIHitTestKey(float imageX, float imageY, float tolerance,
+		wchar_t* buffer, uint32_t bufferChars) const;
+	bool ROIRemove(const wchar_t* key);
+
+	// Initialize 전에 불러도 된다. 보관해 두었다가 레이어 생성 후 적용한다.
+	void SetROIEventHandler(ROIRenderLayer::ROIEventHandler handler, void* userData);
+
+	// Initialize 가 ROI 레이어를 만든 직후 호출한다.
+	void ApplyPendingROIEventHandler();
+
+	// ─────────────────────────────────────────────────────────────
+	// 마우스 콜백
+	//
+	// WndProc(UI 스레드)에서 호출된다. UI 처리 다음, ROI 처리 앞이라
+	// m_roiLock 밖이고 콜백에서 ROI API 를 불러도 데드락이 없다.
+	// ─────────────────────────────────────────────────────────────
+	enum class MouseEventType : uint32_t
+	{
+		Move = 0,
+		LButtonDown, LButtonUp, LButtonDoubleClick,
+		RButtonDown, RButtonUp,
+		MButtonDown, MButtonUp,
+		Wheel,
+		Leave
+	};
+
+	enum : int32_t
+	{
+		MouseModifier_Ctrl = 0x0001,
+		MouseModifier_Shift = 0x0002,
+		MouseModifier_Alt = 0x0004,
+
+		MouseButton_Left = 0x0001,
+		MouseButton_Right = 0x0002,
+		MouseButton_Middle = 0x0004,
+	};
+
+	struct MouseEventData
+	{
+		MouseEventType type = MouseEventType::Move;
+		int32_t screenX = 0;
+		int32_t screenY = 0;
+		float imageX = 0.0f;
+		float imageY = 0.0f;
+		bool isInsideImage = false;
+		int32_t wheelDelta = 0;
+		int32_t modifiers = 0;
+		int32_t buttons = 0;
+	};
+
+	// true 를 반환하면 뷰어는 그 이벤트를 처리하지 않는다.
+	using MouseHandler = bool (*)(const MouseEventData& data, void* userData);
+	void SetMouseHandler(MouseHandler handler, void* userData);
+
+	// WndProc 에서 호출한다. true 면 호스트가 처리했으므로 뷰어는 무시한다.
+	bool DispatchMouseEvent(MouseEventType type, int32_t screenX, int32_t screenY,
+		int32_t wheelDelta = 0);
+
+	// ─────────────────────────────────────────────────────────────
+	// 뷰 제어 / 좌표 변환 / 이미지 정보 / 표시 옵션
+	// ─────────────────────────────────────────────────────────────
+	void SetZoomLevel(float zoom, bool animate);
+	float GetZoomLevel() const;
+	void ZoomFitProgrammatic(bool animate);
+	void Zoom1To1Programmatic(bool animate);
+	void SetViewCenter(float imageX, float imageY, bool animate);
+	void GetViewCenter(float& outX, float& outY) const;
+	void ZoomToRect(const Rect2f& imageRect, float marginRatio, bool animate);
+	bool GetVisibleImageRect(Rect2f& outRect) const;
+
+	bool ScreenToImage(int32_t screenX, int32_t screenY,
+		float& outImageX, float& outImageY) const;
+	bool ImageToScreen(float imageX, float imageY,
+		int32_t& outScreenX, int32_t& outScreenY) const;
+
+	bool GetImageSize(uint32_t& outWidth, uint32_t& outHeight) const;
+	bool GetImageChannelInfo(uint32_t& outChannel, uint32_t& outBitDepth) const;
+	bool GetPixelValueAt(int32_t imageX, int32_t imageY,
+		double* outValues, uint32_t valueCapacity, uint32_t& outChannelCount) const;
+
+	void SetToolbarVisible(bool visible);
+	void SetStatusBarVisible(bool visible);
+	void SetBackgroundColor(uint32_t colorRGB);
+	void SetVSyncEnabled(bool enable);
+
 	// 테스트용 디바이스 로스트 유발.
 	bool SimulateDeviceLost();
 
@@ -259,11 +359,11 @@ private:
 	void HideImageCenterCrossLine();
 
 	template<typename T>
-	void FetchIntPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]);
+	void FetchIntPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]) const;
 
-	void FetchFloatPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]);
+	void FetchFloatPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]) const;
 
-	bool GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4]);
+	bool GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4]) const;
 
 	// UpdateStatusbar: 호출자(UI) 스레드에서 좌표만 예약한다.
 	// ApplyPendingStatusbarUpdate: 렌더 스레드가 Render() 안에서 실제로 반영한다.
@@ -288,6 +388,16 @@ private:
 	// 추적이 풀리므로 OnMouseMove 에서 다시 건다.
 	bool m_isMouseTracking = false;
 
+	// 호스트 마우스 콜백
+	MouseHandler m_mouseHandler = nullptr;
+	void* m_mouseUserData = nullptr;
+
+	// ROI 레이어는 Initialize 에서 만들어진다. 그 전에 등록된 핸들러를
+	// 여기 보관했다가 레이어 생성 직후 옮겨 붙인다. 보관하지 않으면
+	// Initialize 전 등록이 조용히 사라진다.
+	ROIRenderLayer::ROIEventHandler m_roiEventHandler = nullptr;
+	void* m_roiEventUserData = nullptr;
+
 	Point2i m_lButtonDown = { 0, 0 };
 	Point2i m_lButtonDragPoint = { 0, 0 };
 	Point2i m_rButtonDown = { 0, 0 };
@@ -299,7 +409,8 @@ private:
 		SELECTION_RECT_LAYER
 	};
 
-	SRWLOCK m_renderLock = SRWLOCK_INIT;
+	// const 조회 경로(GetPixelValueAt)도 프레임 밖임을 보장해야 하므로 mutable.
+	mutable SRWLOCK m_renderLock = SRWLOCK_INIT;
 	SRWLOCK m_pendingImageLock = SRWLOCK_INIT;
 
 	std::atomic<bool> m_isDirty = { true };
@@ -336,7 +447,7 @@ private:
 };
 
 template<typename T>
-inline void D3D11ImageView_Impl::FetchIntPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4])
+inline void D3D11ImageView_Impl::FetchIntPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]) const
 {
 	const T* pixel = reinterpret_cast<const T*>(image->Ptr(y)) + x * channelCount;
 
@@ -347,7 +458,7 @@ inline void D3D11ImageView_Impl::FetchIntPixel(const ImageBase* image, int32_t x
 	}
 }
 
-inline void D3D11ImageView_Impl::FetchFloatPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4])
+inline void D3D11ImageView_Impl::FetchFloatPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]) const
 {
 	const float* pixel = reinterpret_cast<const float*>(image->Ptr(y)) + x * channelCount;
 

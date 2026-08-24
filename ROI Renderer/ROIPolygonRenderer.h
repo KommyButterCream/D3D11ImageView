@@ -21,6 +21,14 @@ public:
 	bool IsMovable() const override;
 	bool IsResizable() const override;
 
+	// ── 조회 (IROIObject)
+	const std::wstring& GetName() const override;
+	uint32_t GetColorRGB() const override;
+	int32_t GetFontSize() const override;
+	void GetShape(ROIShapeData& outShape) const override;
+	uint32_t GetVertices(Core::ShapeType::Point2f* buffer, uint32_t capacity,
+		uint32_t segmentsPerCurve) const override;
+
 	void Render(const ROIRenderContext& context, bool isSelected, bool isHovered) const override;
 	void OnDeviceLost() override;
 	ROIHitResult HitTest(const Core::ShapeType::Point2f& imagePoint, float tolerance) const override;
@@ -49,6 +57,9 @@ private:
 	std::wstring m_name;
 	std::vector<Core::ShapeType::Point2f> m_points;
 	Core::ShapeType::Rect2f m_bounds = {};
+	// 조회 시 원본을 그대로 돌려주기 위해 보관한다.
+	// D2D1_COLOR_F 에서 역변환하면 반올림으로 1 씩 틀어질 수 있다.
+	uint32_t m_colorRGB = 0;
 	D2D1_COLOR_F m_strokeColor = { 0.0f, 1.0f, 0.0f, 1.0f };
 	bool m_isMovable = true;
 	bool m_isResizable = true;

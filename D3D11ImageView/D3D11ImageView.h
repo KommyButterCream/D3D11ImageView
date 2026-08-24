@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifdef BUILD_D3D11_IMAGE_VIEW_DLL
 #define D3D11_IMAGE_VIEW_API __declspec(dllexport)
@@ -34,6 +34,9 @@
 #include "../../../Module/Core/ShapeType/Ellipse2d.h"
 #include "../../../Module/Core/ShapeType/Polyline2f.h"
 #include "../../../Module/Core/ShapeType/Polygon2f.h"
+
+// ROIObjectType / ROIShapeData. 조회 API 가 해석적 형상을 그대로 내보낸다.
+#include "../ROI Renderer/IROIObject.h"
 
 using Core::ShapeType::Circle2d;
 using Core::ShapeType::Circle2f;
@@ -176,6 +179,185 @@ public:
 	// 실제 경로가 그대로 실행된다.
 	bool SimulateDeviceLost();
 
+
+	// ─────────────────────────────────────────────────────────────
+	// ROI 조회
+	//
+	// 문자열/정점은 소유권을 넘기지 않는다. 호출자 버퍼에만 쓰고,
+	// 반환값은 "필요한 크기"다. buffer == nullptr 로 한 번 불러 크기를
+	// 받고, 버퍼를 잡아 다시 부르는 2회 호출 패턴을 쓴다.
+	// ─────────────────────────────────────────────────────────────
+	uint32_t ROIGetCount() const;
+
+	// 해석적 형상. 원/타원을 원본 파라미터 그대로 받아 무손실 왕복이 된다.
+	bool ROIGetShape(const wchar_t* key, ROIShapeData& outShape) const;
+
+	// 정점 형상. 곡선은 segmentsPerCurve 등분해 근사한다.
+	// 반환값은 필요한 정점 개수(버퍼가 작아도 그대로 알려준다).
+	uint32_t ROIGetVertices(const wchar_t* key, Point2f* buffer,
+		uint32_t capacity, uint32_t segmentsPerCurve = 64) const;
+
+	bool ROIGetBounds(const wchar_t* key, Rect2f& outBounds) const;
+
+	struct ROIInfo
+	{
+		ROIObjectType type = ROIObjectType::Rectangle;
+		uint32_t colorRGB = 0;          // COLORREF 0x00BBGGRR
+		bool isMovable = false;
+		bool isResizable = false;
+		bool isSelected = false;
+		bool isHovered = false;
+		int32_t fontSize = 0;
+	};
+	bool ROIGetInfo(const wchar_t* key, ROIInfo& outInfo) const;
+
+	// 반환값은 종료 널을 포함한 필요 문자 수. 0 이면 대상이 없다.
+	uint32_t ROIGetName(const wchar_t* key, wchar_t* buffer, uint32_t bufferChars) const;
+	uint32_t ROIGetKeyAt(uint32_t index, wchar_t* buffer, uint32_t bufferChars) const;
+	uint32_t ROIGetSelectedKey(wchar_t* buffer, uint32_t bufferChars) const;
+	uint32_t ROIHitTestKey(float imageX, float imageY, float tolerance,
+		wchar_t* buffer, uint32_t bufferChars) const;
+
+	bool ROIRemove(const wchar_t* key);
+
+	// ─────────────────────────────────────────────────────────────
+	// ROI 이벤트
+	//
+	// 핸들러는 UI 스레드에서, ROI 내부 락 밖에서 호출된다.
+	// 따라서 핸들러 안에서 위 조회 API 를 그대로 불러도 데드락이 없다.
+	// ─────────────────────────────────────────────────────────────
+	enum class ROIEvent : uint32_t
+	{
+		Selected = 0,
+		Deselected,
+		EditBegin,
+		EditChanged,
+		EditEnd,
+		DoubleClicked
+	};
+	using ROIEventHandler = void (*)(ROIEvent event, const wchar_t* key, void* userData);
+	void SetROIEventHandler(ROIEventHandler handler, void* userData);
+
+	// ─────────────────────────────────────────────────────────────
+	// 마우스 콜백
+	//
+	// 뷰어 내장 UI(툴바/상태바/컨텍스트 메뉴) 다음, ROI 처리 앞에서
+	// 호출된다. 핸들러가 true 를 반환하면 뷰어는 그 이벤트를 처리하지
+	// 않는다(팬/줌/ROI 편집 모두 건너뛴다).
+	// ─────────────────────────────────────────────────────────────
+	enum class MouseEventType : uint32_t
+	{
+		Move = 0,
+		LButtonDown, LButtonUp, LButtonDoubleClick,
+		RButtonDown, RButtonUp,
+		MButtonDown, MButtonUp,
+		Wheel,
+		Leave
+	};
+
+	enum : int32_t
+	{
+		MouseModifier_Ctrl = 0x0001,
+		MouseModifier_Shift = 0x0002,
+		MouseModifier_Alt = 0x0004,
+
+		MouseButton_Left = 0x0001,
+		MouseButton_Right = 0x0002,
+		MouseButton_Middle = 0x0004,
+	};
+
+	struct MouseEvent
+	{
+		MouseEventType type = MouseEventType::Move;
+		int32_t screenX = 0;
+		int32_t screenY = 0;
+
+		// 이미지 좌표. isInsideImage == false 면 이미지 밖이므로
+		// 외삽된 값이다(음수나 크기 초과가 나올 수 있다).
+		float imageX = 0.0f;
+		float imageY = 0.0f;
+		bool isInsideImage = false;
+
+		int32_t wheelDelta = 0;   // Wheel 일 때만 유효. WHEEL_DELTA 단위
+		int32_t modifiers = 0;    // MouseModifier_* 비트합
+		int32_t buttons = 0;      // MouseButton_* 비트합
+	};
+
+	using MouseHandler = bool (*)(const MouseEvent& e, void* userData);
+	void SetMouseHandler(MouseHandler handler, void* userData);
+
+	// ─────────────────────────────────────────────────────────────
+	// 뷰 제어
+	//
+	// animate == true 면 기존 휠 줌과 같은 감쇠 애니메이션을 타고,
+	// false 면 즉시 반영된다. 카메라 갱신은 다음 프레임에 반영된다.
+	// ─────────────────────────────────────────────────────────────
+	void SetZoom(float zoom, bool animate = true);
+	float GetZoom() const;
+	void ZoomFit(bool animate = true);
+	void Zoom1To1(bool animate = true);
+
+	// 뷰 중심에 놓을 이미지 좌표.
+	void SetCenter(float imageX, float imageY, bool animate = true);
+	void GetCenter(float& outImageX, float& outImageY) const;
+
+	// 지정한 이미지 영역이 화면에 꽉 차도록 줌/중심을 맞춘다.
+	// marginRatio 는 영역 바깥 여백 비율(0.1 = 10%).
+	void ZoomToRect(const Rect2f& imageRect, float marginRatio = 0.1f, bool animate = true);
+
+	// 현재 화면에 보이는 이미지 영역. 이미지가 없으면 false.
+	bool GetVisibleImageRect(Rect2f& outRect) const;
+
+	// ─────────────────────────────────────────────────────────────
+	// 좌표 변환
+	//
+	// 반환값은 결과가 이미지 안인지 여부다. 밖이어도 out 값은 채워진다.
+	// ─────────────────────────────────────────────────────────────
+	bool ScreenToImage(int32_t screenX, int32_t screenY,
+		float& outImageX, float& outImageY) const;
+	bool ImageToScreen(float imageX, float imageY,
+		int32_t& outScreenX, int32_t& outScreenY) const;
+
+	// ─────────────────────────────────────────────────────────────
+	// 이미지 정보
+	// ─────────────────────────────────────────────────────────────
+	bool GetImageSize(uint32_t& outWidth, uint32_t& outHeight) const;
+	bool GetImageChannelInfo(uint32_t& outChannel, uint32_t& outBitDepth) const;
+
+	// 원본 픽셀값. outValues 에 채널 수만큼 쓴다.
+	// 8bit 은 0~255, 16bit 은 0~65535 원본 스케일이다.
+	bool GetPixelValueAt(int32_t imageX, int32_t imageY,
+		double* outValues, uint32_t valueCapacity, uint32_t& outChannelCount) const;
+
+	// ─────────────────────────────────────────────────────────────
+	// 표시 옵션
+	// ─────────────────────────────────────────────────────────────
+	// 호스트가 자체 UI 를 쓰는 경우 내장 패널을 숨긴다.
+	void SetToolbarVisible(bool visible);
+	void SetStatusBarVisible(bool visible);
+
+	// 이미지 바깥 배경색. COLORREF 0x00BBGGRR.
+	void SetBackgroundColor(uint32_t colorRGB);
+
+	// 기본값 true. false 로 두면 티어링 대신 프레임이 버려진다.
+	void SetVSyncEnabled(bool enable);
+
 private:
+	// 호스트 콜백. Impl 에는 이 인스턴스를 userData 로 넘기고
+	// .cpp 의 트램폴린이 여기로 되돌린다. 그래야 공개 헤더가 내부
+	// 타입(ROIRenderLayer 등)을 노출하지 않는다.
+	// 트램폴린은 .cpp 에만 있다. 내부 타입을 헤더로 끌어오지 않기 위해
+	// 전방 선언된 브리지 구조체에만 접근을 허용한다.
+	friend struct D3D11ImageViewCallbackBridge;
+
+	void OnROIEventInternal(uint32_t event, const wchar_t* key);
+	bool OnMouseEventInternal(const void* implEventData);
+
+	ROIEventHandler m_roiHandler = nullptr;
+	void* m_roiUserData = nullptr;
+
+	MouseHandler m_mouseHandler = nullptr;
+	void* m_mouseUserData = nullptr;
+
 	D3D11ImageView_Impl* m_impl = nullptr;
 };

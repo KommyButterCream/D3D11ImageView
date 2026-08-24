@@ -101,6 +101,12 @@
     <ClCompile Include="RenderThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="D3D11ImageViewC.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="D3D11ImageView_Impl_Query.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -195,6 +201,12 @@
     </ClInclude>
     <ClInclude Include="..\Image Tile\TileSampler.h">
       <Filter>Image Tile</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Overlay Renderer\OverlayUtilities.h">
+      <Filter>Overlay Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="D3D11ImageViewC.h">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -1,4 +1,6 @@
 #include "pch.h"
+
+#include <cmath>
 #include "ROIEllipseRenderer.h"
 
 #include "ROIUtilities.h"
@@ -19,6 +21,7 @@ bool ROIEllipseRenderer::UpdateDefinition(const wchar_t* name, const Ellipse2f& 
 	m_ellipse = ellipse;
 	m_ellipse.radiusX = max(fabsf(m_ellipse.radiusX), ROIUtilities::kMinShapeSize);
 	m_ellipse.radiusY = max(fabsf(m_ellipse.radiusY), ROIUtilities::kMinShapeSize);
+	m_colorRGB = static_cast<uint32_t>(rgb);
 	m_strokeColor = ROIUtilities::ConvertColor(rgb);
 	m_isMovable = isMovable;
 	m_isResizable = isResizable;
@@ -204,3 +207,66 @@ void ROIEllipseRenderer::UpdateBounds()
 	m_bounds = m_ellipse.BoundingBoxF();
 }
 
+
+/*---------------------------------------------------------
+	조회 (IROIObject)
+---------------------------------------------------------*/
+const std::wstring& ROIEllipseRenderer::GetName() const
+{
+	return m_name;
+}
+
+uint32_t ROIEllipseRenderer::GetColorRGB() const
+{
+	return m_colorRGB;
+}
+
+int32_t ROIEllipseRenderer::GetFontSize() const
+{
+	return static_cast<int32_t>(m_fontSize);
+}
+
+void ROIEllipseRenderer::GetShape(ROIShapeData& outShape) const
+{
+	outShape = {};
+	outShape.type = ROIObjectType::Ellipse;
+	outShape.vertexCount = 0;
+
+	outShape.u.ellipse.cx = m_ellipse.x;
+	outShape.u.ellipse.cy = m_ellipse.y;
+	outShape.u.ellipse.rx = m_ellipse.radiusX;
+	outShape.u.ellipse.ry = m_ellipse.radiusY;
+	outShape.u.ellipse.angleRad = m_ellipse.angleRad;
+}
+
+uint32_t ROIEllipseRenderer::GetVertices(Core::ShapeType::Point2f* buffer,
+	uint32_t capacity, uint32_t segmentsPerCurve) const
+{
+	const uint32_t segments = (segmentsPerCurve == 0) ? 64u : segmentsPerCurve;
+
+	if (!buffer || capacity < segments)
+		return segments;
+
+	// 매개변수 t 를 등분한다. 호 길이 등분이 아니므로 곡률이 큰 쪽이 거칠지만,
+	// 마스킹/순회 용도에는 충분하고 계측은 해석적 형상을 쓰면 된다.
+	const float cosA = ::cosf(m_ellipse.angleRad);
+	const float sinA = ::sinf(m_ellipse.angleRad);
+
+	for (uint32_t i = 0; i < segments; ++i)
+	{
+		const float t = Core::Util::kPi<float> * 2.0f
+			* (static_cast<float>(i) / static_cast<float>(segments));
+
+		// 회전 전 좌표
+		const float lx = m_ellipse.radiusX * ::cosf(t);
+		const float ly = m_ellipse.radiusY * ::sinf(t);
+
+		// angleRad 만큼 회전시켜 중심에 더한다.
+		buffer[i] = {
+			m_ellipse.x + lx * cosA - ly * sinA,
+			m_ellipse.y + lx * sinA + ly * cosA
+		};
+	}
+
+	return segments;
+}

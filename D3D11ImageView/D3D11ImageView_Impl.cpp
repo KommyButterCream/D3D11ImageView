@@ -176,6 +176,9 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	if (!m_roiLayer->Initialize(m_renderContext.get()))
 		return failInitialize();
 
+	// Initialize 전에 등록된 ROI 이벤트 핸들러를 이제 붙인다.
+	ApplyPendingROIEventHandler();
+
 	m_layers.push_back(m_roiLayer.get());
 
 	// Render Image Center Line Layer
@@ -629,7 +632,7 @@ void D3D11ImageView_Impl::HideImageCenterCrossLine()
 	InvalidateFrame();
 }
 
-bool D3D11ImageView_Impl::GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4])
+bool D3D11ImageView_Impl::GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4]) const
 {
 	if (!image || image->IsEmpty() || !image->IsInside(x, y))
 		return false;

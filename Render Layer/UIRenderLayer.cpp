@@ -908,3 +908,23 @@ void UIRenderLayer::UpdateStatusbarImageSize(uint32_t width, uint32_t height)
 
 
 
+
+// 호스트가 자체 UI 를 쓰는 경우 뷰어 내장 패널을 숨긴다.
+//
+// WPF 등에서는 이미지 위에 호스트 UI 를 얹을 수 없으므로(HWND airspace),
+// 툴바/상태바를 끄고 호스트가 이미지 바깥에 자기 UI 를 두는 구성을 쓴다.
+void UIRenderLayer::SetToolbarVisible(bool visible)
+{
+	if (m_toolbarPanel)
+	{
+		m_toolbarPanel->SetVisible(visible);
+	}
+}
+
+void UIRenderLayer::SetStatusBarVisible(bool visible)
+{
+	if (m_statusPanel)
+	{
+		m_statusPanel->SetVisible(visible);
+	}
+}

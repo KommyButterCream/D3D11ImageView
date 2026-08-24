@@ -1,4 +1,6 @@
 #include "pch.h"
+
+#include <cmath>
 #include "ROICircleRenderer.h"
 
 #include "ROIUtilities.h"
@@ -18,6 +20,7 @@ bool ROICircleRenderer::UpdateDefinition(const wchar_t* name, const Circle2f& ci
 	m_name = name ? name : L"";
 	m_circle = circle;
 	m_circle.radius = max(fabsf(m_circle.radius), ROIUtilities::kMinShapeSize);
+	m_colorRGB = static_cast<uint32_t>(rgb);
 	m_strokeColor = ROIUtilities::ConvertColor(rgb);
 	m_isMovable = isMovable;
 	m_isResizable = isResizable;
@@ -176,3 +179,55 @@ void ROICircleRenderer::UpdateBounds()
 	m_bounds = m_circle.BoundingBoxF();
 }
 
+
+/*---------------------------------------------------------
+	조회 (IROIObject)
+---------------------------------------------------------*/
+const std::wstring& ROICircleRenderer::GetName() const
+{
+	return m_name;
+}
+
+uint32_t ROICircleRenderer::GetColorRGB() const
+{
+	return m_colorRGB;
+}
+
+int32_t ROICircleRenderer::GetFontSize() const
+{
+	return static_cast<int32_t>(m_fontSize);
+}
+
+void ROICircleRenderer::GetShape(ROIShapeData& outShape) const
+{
+	outShape = {};
+	outShape.type = ROIObjectType::Circle;
+	outShape.vertexCount = 0;   // 해석적 형상이므로 정점 개수는 의미 없음
+
+	outShape.u.circle.cx = m_circle.x;
+	outShape.u.circle.cy = m_circle.y;
+	outShape.u.circle.radius = m_circle.radius;
+}
+
+uint32_t ROICircleRenderer::GetVertices(Core::ShapeType::Point2f* buffer,
+	uint32_t capacity, uint32_t segmentsPerCurve) const
+{
+	const uint32_t segments = (segmentsPerCurve == 0) ? 64u : segmentsPerCurve;
+
+	if (!buffer || capacity < segments)
+		return segments;
+
+	// 중심각을 등분한다. 시작점은 +X 방향.
+	for (uint32_t i = 0; i < segments; ++i)
+	{
+		const float angle = Core::Util::kPi<float> * 2.0f
+			* (static_cast<float>(i) / static_cast<float>(segments));
+
+		buffer[i] = {
+			m_circle.x + m_circle.radius * ::cosf(angle),
+			m_circle.y + m_circle.radius * ::sinf(angle)
+		};
+	}
+
+	return segments;
+}

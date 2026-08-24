@@ -27,6 +27,7 @@ bool ROIRectangleRenderer::UpdateDefinition(const wchar_t* name, const Rect2f& r
 	m_name = name ? name : L"";
 	m_rect = rect;
 	m_rect.Normalize();
+	m_colorRGB = static_cast<uint32_t>(rgb);
 	m_strokeColor = ConvertColor(rgb);
 	m_isMovable = isMovable;
 	m_isResizable = isResizable;
@@ -224,3 +225,50 @@ D2D1_COLOR_F ROIRectangleRenderer::ConvertColor(COLORREF rgb)
 	};
 }
 
+
+/*---------------------------------------------------------
+	조회 (IROIObject)
+---------------------------------------------------------*/
+const std::wstring& ROIRectangleRenderer::GetName() const
+{
+	return m_name;
+}
+
+uint32_t ROIRectangleRenderer::GetColorRGB() const
+{
+	return m_colorRGB;
+}
+
+int32_t ROIRectangleRenderer::GetFontSize() const
+{
+	return static_cast<int32_t>(m_fontSize);
+}
+
+void ROIRectangleRenderer::GetShape(ROIShapeData& outShape) const
+{
+	outShape = {};
+	outShape.type = ROIObjectType::Rectangle;
+	outShape.vertexCount = 4;
+
+	outShape.u.rect.left = m_rect.left;
+	outShape.u.rect.top = m_rect.top;
+	outShape.u.rect.right = m_rect.right;
+	outShape.u.rect.bottom = m_rect.bottom;
+}
+
+uint32_t ROIRectangleRenderer::GetVertices(Core::ShapeType::Point2f* buffer,
+	uint32_t capacity, uint32_t /*segmentsPerCurve*/) const
+{
+	constexpr uint32_t kNeeded = 4;
+
+	if (!buffer || capacity < kNeeded)
+		return kNeeded;
+
+	// 좌상 -> 우상 -> 우하 -> 좌하 (시계 방향)
+	buffer[0] = { m_rect.left,  m_rect.top };
+	buffer[1] = { m_rect.right, m_rect.top };
+	buffer[2] = { m_rect.right, m_rect.bottom };
+	buffer[3] = { m_rect.left,  m_rect.bottom };
+
+	return kNeeded;
+}

@@ -592,3 +592,317 @@ bool D3D11ImageView::SimulateDeviceLost()
 
 	return false;
 }
+
+/*=====================================================
+	ROI 조회
+
+	전부 Impl 로 위임한다. 여기에 로직을 두면 C ABI 경로와
+	동작이 갈라진다.
+=====================================================*/
+uint32_t D3D11ImageView::ROIGetCount() const
+{
+	return m_impl ? m_impl->ROIGetCount() : 0u;
+}
+
+bool D3D11ImageView::ROIGetShape(const wchar_t* key, ROIShapeData& outShape) const
+{
+	return m_impl ? m_impl->ROIGetShape(key, outShape) : false;
+}
+
+uint32_t D3D11ImageView::ROIGetVertices(const wchar_t* key, Point2f* buffer,
+	uint32_t capacity, uint32_t segmentsPerCurve) const
+{
+	return m_impl ? m_impl->ROIGetVertices(key, buffer, capacity, segmentsPerCurve) : 0u;
+}
+
+bool D3D11ImageView::ROIGetBounds(const wchar_t* key, Rect2f& outBounds) const
+{
+	return m_impl ? m_impl->ROIGetBounds(key, outBounds) : false;
+}
+
+bool D3D11ImageView::ROIGetInfo(const wchar_t* key, ROIInfo& outInfo) const
+{
+	if (!m_impl)
+	{
+		return false;
+	}
+
+	ROIRenderLayer::ROIInfoData internalInfo;
+	if (!m_impl->ROIGetInfo(key, internalInfo))
+	{
+		return false;
+	}
+
+	outInfo.type = internalInfo.type;
+	outInfo.colorRGB = internalInfo.colorRGB;
+	outInfo.isMovable = internalInfo.isMovable;
+	outInfo.isResizable = internalInfo.isResizable;
+	outInfo.isSelected = internalInfo.isSelected;
+	outInfo.isHovered = internalInfo.isHovered;
+	outInfo.fontSize = internalInfo.fontSize;
+
+	return true;
+}
+
+uint32_t D3D11ImageView::ROIGetName(const wchar_t* key, wchar_t* buffer, uint32_t bufferChars) const
+{
+	return m_impl ? m_impl->ROIGetName(key, buffer, bufferChars) : 0u;
+}
+
+uint32_t D3D11ImageView::ROIGetKeyAt(uint32_t index, wchar_t* buffer, uint32_t bufferChars) const
+{
+	return m_impl ? m_impl->ROIGetKeyAt(index, buffer, bufferChars) : 0u;
+}
+
+uint32_t D3D11ImageView::ROIGetSelectedKey(wchar_t* buffer, uint32_t bufferChars) const
+{
+	return m_impl ? m_impl->ROIGetSelectedKey(buffer, bufferChars) : 0u;
+}
+
+uint32_t D3D11ImageView::ROIHitTestKey(float imageX, float imageY, float tolerance,
+	wchar_t* buffer, uint32_t bufferChars) const
+{
+	return m_impl ? m_impl->ROIHitTestKey(imageX, imageY, tolerance, buffer, bufferChars) : 0u;
+}
+
+bool D3D11ImageView::ROIRemove(const wchar_t* key)
+{
+	return m_impl ? m_impl->ROIRemove(key) : false;
+}
+
+/*=====================================================
+	콜백 트램폴린
+
+	Impl 시그니처를 공개 시그니처로 옮긴다. 함수 포인터를
+	reinterpret_cast 하지 않고 실제 변환을 거치는 이유는,
+	두 열거형/구조체가 지금은 같은 배치여도 앞으로 갈라질 수
+	있어서다.
+=====================================================*/
+struct D3D11ImageViewCallbackBridge
+{
+	static void ROIEventTrampoline(ROIRenderLayer::ROIEvent event, const wchar_t* key, void* userData)
+	{
+		D3D11ImageView* view = static_cast<D3D11ImageView*>(userData);
+		if (!view)
+		{
+			return;
+		}
+
+		view->OnROIEventInternal(static_cast<uint32_t>(event), key);
+	}
+
+	static bool MouseTrampoline(const D3D11ImageView_Impl::MouseEventData& data, void* userData)
+	{
+		D3D11ImageView* view = static_cast<D3D11ImageView*>(userData);
+		if (!view)
+		{
+			return false;
+		}
+
+		return view->OnMouseEventInternal(&data);
+	}
+};
+
+void D3D11ImageView::OnROIEventInternal(uint32_t event, const wchar_t* key)
+{
+	if (m_roiHandler)
+	{
+		m_roiHandler(static_cast<ROIEvent>(event), key, m_roiUserData);
+	}
+}
+
+bool D3D11ImageView::OnMouseEventInternal(const void* implEventData)
+{
+	if (!m_mouseHandler || !implEventData)
+	{
+		return false;
+	}
+
+	const D3D11ImageView_Impl::MouseEventData& src =
+		*static_cast<const D3D11ImageView_Impl::MouseEventData*>(implEventData);
+
+	MouseEvent e;
+	e.type = static_cast<MouseEventType>(src.type);
+	e.screenX = src.screenX;
+	e.screenY = src.screenY;
+	e.imageX = src.imageX;
+	e.imageY = src.imageY;
+	e.isInsideImage = src.isInsideImage;
+	e.wheelDelta = src.wheelDelta;
+	e.modifiers = src.modifiers;
+	e.buttons = src.buttons;
+
+	return m_mouseHandler(e, m_mouseUserData);
+}
+
+void D3D11ImageView::SetROIEventHandler(ROIEventHandler handler, void* userData)
+{
+	m_roiHandler = handler;
+	m_roiUserData = userData;
+
+	if (m_impl)
+	{
+		// 핸들러를 지웠으면 Impl 쪽도 떼어 불필요한 호출을 막는다.
+		m_impl->SetROIEventHandler(handler ? &D3D11ImageViewCallbackBridge::ROIEventTrampoline : nullptr, this);
+	}
+}
+
+void D3D11ImageView::SetMouseHandler(MouseHandler handler, void* userData)
+{
+	m_mouseHandler = handler;
+	m_mouseUserData = userData;
+
+	if (m_impl)
+	{
+		m_impl->SetMouseHandler(handler ? &D3D11ImageViewCallbackBridge::MouseTrampoline : nullptr, this);
+	}
+}
+
+/*=====================================================
+	뷰 제어
+=====================================================*/
+void D3D11ImageView::SetZoom(float zoom, bool animate)
+{
+	if (m_impl)
+	{
+		m_impl->SetZoomLevel(zoom, animate);
+	}
+}
+
+float D3D11ImageView::GetZoom() const
+{
+	return m_impl ? m_impl->GetZoomLevel() : 0.0f;
+}
+
+void D3D11ImageView::ZoomFit(bool animate)
+{
+	if (m_impl)
+	{
+		m_impl->ZoomFitProgrammatic(animate);
+	}
+}
+
+void D3D11ImageView::Zoom1To1(bool animate)
+{
+	if (m_impl)
+	{
+		m_impl->Zoom1To1Programmatic(animate);
+	}
+}
+
+void D3D11ImageView::SetCenter(float imageX, float imageY, bool animate)
+{
+	if (m_impl)
+	{
+		m_impl->SetViewCenter(imageX, imageY, animate);
+	}
+}
+
+void D3D11ImageView::GetCenter(float& outImageX, float& outImageY) const
+{
+	outImageX = 0.0f;
+	outImageY = 0.0f;
+
+	if (m_impl)
+	{
+		m_impl->GetViewCenter(outImageX, outImageY);
+	}
+}
+
+void D3D11ImageView::ZoomToRect(const Rect2f& imageRect, float marginRatio, bool animate)
+{
+	if (m_impl)
+	{
+		m_impl->ZoomToRect(imageRect, marginRatio, animate);
+	}
+}
+
+bool D3D11ImageView::GetVisibleImageRect(Rect2f& outRect) const
+{
+	return m_impl ? m_impl->GetVisibleImageRect(outRect) : false;
+}
+
+/*=====================================================
+	좌표 변환
+=====================================================*/
+bool D3D11ImageView::ScreenToImage(int32_t screenX, int32_t screenY,
+	float& outImageX, float& outImageY) const
+{
+	outImageX = 0.0f;
+	outImageY = 0.0f;
+
+	return m_impl ? m_impl->ScreenToImage(screenX, screenY, outImageX, outImageY) : false;
+}
+
+bool D3D11ImageView::ImageToScreen(float imageX, float imageY,
+	int32_t& outScreenX, int32_t& outScreenY) const
+{
+	outScreenX = 0;
+	outScreenY = 0;
+
+	return m_impl ? m_impl->ImageToScreen(imageX, imageY, outScreenX, outScreenY) : false;
+}
+
+/*=====================================================
+	이미지 정보
+=====================================================*/
+bool D3D11ImageView::GetImageSize(uint32_t& outWidth, uint32_t& outHeight) const
+{
+	outWidth = 0;
+	outHeight = 0;
+
+	return m_impl ? m_impl->GetImageSize(outWidth, outHeight) : false;
+}
+
+bool D3D11ImageView::GetImageChannelInfo(uint32_t& outChannel, uint32_t& outBitDepth) const
+{
+	outChannel = 0;
+	outBitDepth = 0;
+
+	return m_impl ? m_impl->GetImageChannelInfo(outChannel, outBitDepth) : false;
+}
+
+bool D3D11ImageView::GetPixelValueAt(int32_t imageX, int32_t imageY,
+	double* outValues, uint32_t valueCapacity, uint32_t& outChannelCount) const
+{
+	outChannelCount = 0;
+
+	return m_impl
+		? m_impl->GetPixelValueAt(imageX, imageY, outValues, valueCapacity, outChannelCount)
+		: false;
+}
+
+/*=====================================================
+	표시 옵션
+=====================================================*/
+void D3D11ImageView::SetToolbarVisible(bool visible)
+{
+	if (m_impl)
+	{
+		m_impl->SetToolbarVisible(visible);
+	}
+}
+
+void D3D11ImageView::SetStatusBarVisible(bool visible)
+{
+	if (m_impl)
+	{
+		m_impl->SetStatusBarVisible(visible);
+	}
+}
+
+void D3D11ImageView::SetBackgroundColor(uint32_t colorRGB)
+{
+	if (m_impl)
+	{
+		m_impl->SetBackgroundColor(colorRGB);
+	}
+}
+
+void D3D11ImageView::SetVSyncEnabled(bool enable)
+{
+	if (m_impl)
+	{
+		m_impl->SetVSyncEnabled(enable);
+	}
+}

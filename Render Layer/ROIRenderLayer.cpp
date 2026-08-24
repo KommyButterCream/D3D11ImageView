@@ -283,6 +283,9 @@ bool ROIRenderLayer::OnLButtonDown(float screenX, float screenY)
 	::AcquireSRWLockExclusive(&m_roiLock);
 	IROIObject* hitObject = HitTest(imagePoint, tolerance, hitResult);
 
+	// 선택이 바뀌었는지 먼저 판단해야 이벤트를 중복으로 내지 않는다.
+	IROIObject* previousSelection = m_selectedObject;
+
 	m_selectedObject = hitObject;
 	m_activeObject = hitObject;
 	m_activeHit = hitResult;
@@ -294,7 +297,27 @@ bool ROIRenderLayer::OnLButtonDown(float screenX, float screenY)
 		m_activeObject->BeginDrag(imagePoint, hitResult);
 	}
 
+	if (previousSelection != hitObject)
+	{
+		if (previousSelection)
+		{
+			QueueEvent(ROIEvent::Deselected, previousSelection->GetKey());
+		}
+		if (hitObject)
+		{
+			QueueEvent(ROIEvent::Selected, hitObject->GetKey());
+		}
+	}
+
+	if (hitObject)
+	{
+		QueueEvent(ROIEvent::EditBegin, hitObject->GetKey());
+	}
+
 	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	// 반드시 락 밖에서 낸다. 호스트가 콜백에서 ROI API 를 불러도 안전하다.
+	DispatchPendingEvents();
 
 	return hitObject != nullptr;
 }
@@ -315,6 +338,9 @@ bool ROIRenderLayer::OnMouseMove(float screenX, float screenY)
 	{
 		m_activeObject->UpdateDrag(imagePoint);
 		changed = true;
+
+		// 드래그 중 형상 변화. 프레임마다가 아니라 이동이 있을 때만 나간다.
+		QueueEvent(ROIEvent::EditChanged, m_activeObject->GetKey());
 	}
 	else
 	{
@@ -324,6 +350,8 @@ bool ROIRenderLayer::OnMouseMove(float screenX, float screenY)
 	}
 
 	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
 
 	return changed;
 }
@@ -340,6 +368,10 @@ bool ROIRenderLayer::OnLButtonUp(float screenX, float screenY)
 	if (m_activeObject)
 	{
 		m_activeObject->EndDrag();
+
+		// 결과 확정 지점. 호스트는 보통 여기서 새 형상을 저장한다.
+		QueueEvent(ROIEvent::EditEnd, m_activeObject->GetKey());
+
 		m_activeObject = nullptr;
 		m_activeHit = {};
 		changed = true;
@@ -348,6 +380,8 @@ bool ROIRenderLayer::OnLButtonUp(float screenX, float screenY)
 	m_isDragging = false;
 
 	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
 
 	return changed;
 }
@@ -581,3 +615,270 @@ bool ROIRenderLayer::UpdateHoverObject(IROIObject* hoveredObject)
 
 
 
+
+/*---------------------------------------------------------
+	조회
+---------------------------------------------------------*/
+uint32_t ROIRenderLayer::CopyString(const std::wstring& source,
+	wchar_t* buffer, uint32_t bufferChars)
+{
+	// 반환값은 종료 널을 포함한 필요 문자 수. 2회 호출 패턴용.
+	const uint32_t needed = static_cast<uint32_t>(source.size()) + 1;
+
+	if (!buffer || bufferChars < needed)
+		return needed;
+
+	::wcscpy_s(buffer, bufferChars, source.c_str());
+
+	return needed;
+}
+
+uint32_t ROIRenderLayer::ROIGetCount() const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+	const uint32_t count = static_cast<uint32_t>(m_roiObjects.size());
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return count;
+}
+
+bool ROIRenderLayer::ROIGetShape(const wchar_t* key, ROIShapeData& outShape) const
+{
+	if (!key)
+		return false;
+
+	::AcquireSRWLockShared(&m_roiLock);
+
+	const IROIObject* object = FindObjectByKey(key);
+	const bool found = (object != nullptr);
+	if (found)
+	{
+		object->GetShape(outShape);
+	}
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return found;
+}
+
+uint32_t ROIRenderLayer::ROIGetVertices(const wchar_t* key,
+	Core::ShapeType::Point2f* buffer, uint32_t capacity,
+	uint32_t segmentsPerCurve) const
+{
+	if (!key)
+		return 0;
+
+	::AcquireSRWLockShared(&m_roiLock);
+
+	const IROIObject* object = FindObjectByKey(key);
+	const uint32_t needed = object
+		? object->GetVertices(buffer, capacity, segmentsPerCurve)
+		: 0u;
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return needed;
+}
+
+bool ROIRenderLayer::ROIGetBounds(const wchar_t* key,
+	Core::ShapeType::Rect2f& outBounds) const
+{
+	if (!key)
+		return false;
+
+	::AcquireSRWLockShared(&m_roiLock);
+
+	const IROIObject* object = FindObjectByKey(key);
+	const bool found = (object != nullptr);
+	if (found)
+	{
+		outBounds = object->GetBounds();
+	}
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return found;
+}
+
+bool ROIRenderLayer::ROIGetInfo(const wchar_t* key, ROIInfoData& outInfo) const
+{
+	if (!key)
+		return false;
+
+	::AcquireSRWLockShared(&m_roiLock);
+
+	const IROIObject* object = FindObjectByKey(key);
+	const bool found = (object != nullptr);
+	if (found)
+	{
+		outInfo.type = object->GetObjectType();
+		outInfo.colorRGB = object->GetColorRGB();
+		outInfo.isMovable = object->IsMovable();
+		outInfo.isResizable = object->IsResizable();
+		outInfo.isSelected = (object == m_selectedObject);
+		outInfo.isHovered = (object == m_hoveredObject);
+		outInfo.fontSize = object->GetFontSize();
+	}
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return found;
+}
+
+uint32_t ROIRenderLayer::ROIGetName(const wchar_t* key,
+	wchar_t* buffer, uint32_t bufferChars) const
+{
+	if (!key)
+		return 0;
+
+	::AcquireSRWLockShared(&m_roiLock);
+
+	const IROIObject* object = FindObjectByKey(key);
+	const uint32_t needed = object
+		? CopyString(object->GetName(), buffer, bufferChars)
+		: 0u;
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return needed;
+}
+
+uint32_t ROIRenderLayer::ROIGetKeyAt(uint32_t index,
+	wchar_t* buffer, uint32_t bufferChars) const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+
+	uint32_t needed = 0;
+	if (index < m_roiObjects.size() && m_roiObjects[index])
+	{
+		needed = CopyString(m_roiObjects[index]->GetKey(), buffer, bufferChars);
+	}
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return needed;
+}
+
+uint32_t ROIRenderLayer::ROIGetSelectedKey(wchar_t* buffer, uint32_t bufferChars) const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+
+	const uint32_t needed = m_selectedObject
+		? CopyString(m_selectedObject->GetKey(), buffer, bufferChars)
+		: 0u;
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return needed;
+}
+
+uint32_t ROIRenderLayer::ROIHitTestKey(float imageX, float imageY, float tolerance,
+	wchar_t* buffer, uint32_t bufferChars) const
+{
+	const Core::ShapeType::Point2f imagePoint{ imageX, imageY };
+
+	// tolerance <= 0 이면 현재 배율 기준 기본값을 쓴다.
+	const float actualTolerance = (tolerance > 0.0f)
+		? tolerance
+		: GetHitToleranceInImage();
+
+	::AcquireSRWLockShared(&m_roiLock);
+
+	ROIHitResult hitResult = {};
+	const IROIObject* object = HitTest(imagePoint, actualTolerance, hitResult);
+	const uint32_t needed = object
+		? CopyString(object->GetKey(), buffer, bufferChars)
+		: 0u;
+
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return needed;
+}
+
+bool ROIRenderLayer::ROIRemove(const wchar_t* key)
+{
+    if (!key)
+        return false;
+
+    ::AcquireSRWLockExclusive(&m_roiLock);
+
+    const bool found = (FindObjectByKey(key) != nullptr);
+    if (found)
+    {
+        RemoveObjectByKey(key);
+    }
+
+    ::ReleaseSRWLockExclusive(&m_roiLock);
+
+    return found;
+}
+
+/*---------------------------------------------------------
+	이벤트
+---------------------------------------------------------*/
+void ROIRenderLayer::SetROIEventHandler(ROIEventHandler handler, void* userData)
+{
+	::AcquireSRWLockExclusive(&m_roiLock);
+	m_eventHandler = handler;
+	m_eventUserData = userData;
+	::ReleaseSRWLockExclusive(&m_roiLock);
+}
+
+void ROIRenderLayer::QueueEvent(ROIEvent event, const std::wstring& key)
+{
+	// 락 안에서 호출된다. 콜백을 여기서 부르면 호스트가 콜백에서 ROI API 를
+	// 호출하는 순간 자기 자신을 기다린다.
+	if (!m_eventHandler)
+		return;
+
+	m_pendingEvents.push_back(PendingEvent{ event, key });
+}
+
+void ROIRenderLayer::DispatchPendingEvents()
+{
+	// 락 밖에서 호출된다. 큐를 먼저 옮겨 담고 나서 콜백을 낸다.
+	// (콜백이 다시 ROI API 를 불러 큐를 건드릴 수 있으므로)
+	std::vector<PendingEvent> events;
+	ROIEventHandler handler = nullptr;
+	void* userData = nullptr;
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+	if (!m_pendingEvents.empty())
+	{
+		events.swap(m_pendingEvents);
+		handler = m_eventHandler;
+		userData = m_eventUserData;
+	}
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	if (!handler)
+		return;
+
+	for (const PendingEvent& pending : events)
+	{
+		handler(pending.event, pending.key.c_str(), userData);
+	}
+}
+
+bool ROIRenderLayer::OnLButtonDoubleClick(float screenX, float screenY)
+{
+	if (!m_camera)
+		return false;
+
+	const Core::ShapeType::Point2f imagePoint = ScreenToImage(screenX, screenY);
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	ROIHitResult hitResult = {};
+	const IROIObject* object = HitTest(imagePoint, GetHitToleranceInImage(), hitResult);
+	if (object)
+	{
+		QueueEvent(ROIEvent::DoubleClicked, object->GetKey());
+	}
+
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
+
+	return object != nullptr;
+}

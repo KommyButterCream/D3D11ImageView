@@ -36,6 +36,8 @@
     <ClCompile Include="..\ROI Renderer\ROIEllipseRenderer.cpp" />
     <ClCompile Include="..\ROI Renderer\ROIPolygonRenderer.cpp" />
     <ClCompile Include="..\ROI Renderer\ROIRectangleRenderer.cpp" />
+    <ClCompile Include="D3D11ImageViewC.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl_Query.cpp" />
     <ClCompile Include="HighResolutionTimer.cpp" />
     <ClCompile Include="D3D11ImageView.cpp" />
     <ClCompile Include="D3D11ImageView_Impl.cpp" />
@@ -77,6 +79,7 @@
     <ClInclude Include="..\ROI Renderer\ROIRectangleRenderer.h" />
     <ClInclude Include="..\ROI Renderer\ROIRenderContext.h" />
     <ClInclude Include="..\ROI Renderer\ROIUtilities.h" />
+    <ClInclude Include="D3D11ImageViewC.h" />
     <ClInclude Include="HighResolutionTimer.h" />
     <ClInclude Include="D3D11ImageView.h" />
     <ClInclude Include="D3D11ImageView_Impl.h" />
