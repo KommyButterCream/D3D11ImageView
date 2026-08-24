@@ -537,9 +537,14 @@ void D3D11ImageView::ROIClear()
 
 bool D3D11ImageView::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
 {
+	return UpdateImage(data, width, height, stride, channel, 8);
+}
+
+bool D3D11ImageView::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth)
+{
 	if (m_impl)
 	{
-		return m_impl->UpdateImage(data, width, height, stride, channel);
+		return m_impl->UpdateImage(data, width, height, stride, channel, bitDepth);
 	}
 	else
 	{
@@ -576,4 +581,14 @@ void D3D11ImageView::DetachImage()
 	{
 		m_impl->DetachImage();
 	}
+}
+
+bool D3D11ImageView::SimulateDeviceLost()
+{
+	if (m_impl)
+	{
+		return m_impl->SimulateDeviceLost();
+	}
+
+	return false;
 }

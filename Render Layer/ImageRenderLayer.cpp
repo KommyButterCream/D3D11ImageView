@@ -17,6 +17,25 @@
 
 static const uint16_t kQuadIndices[] = { 0,1,2, 0,2,3 };
 
+// 타일 1장 = 삼각형 2개 = 정점 6개.
+static constexpr uint32_t kVerticesPerTile = 6;
+
+// 정점 버퍼 상한(= 약 10,900 타일). 정상 경로에서는 닿지 않는다.
+// 뷰포트/프리페치 계산이 깨졌을 때 버퍼가 무한히 커지는 것을 막는 안전장치다.
+static constexpr uint32_t kMaxTileVertexLimit = 65536;
+
+// 확대 필터 전환 임계(Single 모드).
+//
+// 이 아래는 LINEAR(부드러움), 이 위는 POINT(픽셀 경계 보존).
+// 1.0 이 아니라 2.0 인 이유: fit ~ 1:1 구간은 휠 조작에서 가장 자주
+// 오가는 곳이라 여기서 필터가 바뀌면 애니메이션 도중에 튄다.
+// 픽셀 단위 판독이 필요한 배율은 실질적으로 2x 이상이다.
+//
+// Enter/Exit 를 벌려 히스테리시스를 만든다. 줌 애니메이션이 임계를
+// 살짝 넘나들 때 프레임마다 필터가 바뀌는 것을 막는다.
+static constexpr float kMagPointEnterZoom = 2.0f;
+static constexpr float kMagPointExitZoom  = 1.7f;
+
 ImageRenderLayer::ImageRenderLayer()
 {
 
@@ -87,6 +106,10 @@ bool ImageRenderLayer::Render()
 	if (!m_initialized)
 		return true;
 
+	// 디바이스 로스트 ~ 복구 사이에는 아무것도 그리지 않는다.
+	if (!m_deviceResourcesReady)
+		return true;
+
 	if (!m_context)
 		return false;
 
@@ -102,7 +125,7 @@ bool ImageRenderLayer::Render()
 				m_tileManager->NeedsReconfigure(viewWidth, viewHeight))
 			{
 				if (m_tileManager->Configure(m_image->Width(), m_image->Height(),
-					m_image->Channel(), 8, viewWidth, viewHeight))
+					m_image->Channel(), GetAttachedBitDepth(), viewWidth, viewHeight))
 				{
 					m_tileManager->PrimeCoarsestLevel(m_image->ImageBuffer(),
 						m_image->Width(), m_image->Stride(), m_image->Height(), m_image->Channel());
@@ -181,6 +204,16 @@ void ImageRenderLayer::OnResize(uint32_t width, uint32_t height)
 void ImageRenderLayer::OnDeviceLost()
 {
 	ReleaseDeviceResources();
+
+	// 타일 풀의 ID3D11Texture2D 도 죽은 디바이스 소속이다.
+	// TileManager 는 리스너로 등록되어 있지 않으므로 여기서 위임한다.
+	if (m_tileManager)
+	{
+		m_tileManager->OnDeviceLost();
+	}
+
+	// 디바이스가 사라졌으므로 어떤 모드도 그릴 수 없는 상태다.
+	m_deviceResourcesReady = false;
 }
 
 void ImageRenderLayer::OnDeviceRestored()
@@ -202,6 +235,58 @@ void ImageRenderLayer::OnDeviceRestored()
 	{
 		ReleaseDeviceResources();
 		return;
+	}
+
+	if (m_tileManager)
+	{
+		m_tileManager->OnDeviceRestored(m_device, m_contextD3D);
+	}
+
+	m_deviceResourcesReady = true;
+
+	// 셰이더/샘플러만 되살려서는 화면이 비어 있다.
+	// 원본 CPU 버퍼가 살아 있으면 이미지까지 다시 올린다.
+	RestoreImageAfterDeviceLoss();
+}
+
+// 디바이스 복구 후 화면을 되돌린다.
+//
+// m_image 는 호출자 버퍼를 Attach 한 것이라 디바이스와 무관하게 살아 있다.
+// 그걸 그대로 다시 업로드하면 사용자는 로스트를 눈치채지 못한다.
+// (텍스처/공유텍스처 입력은 원본이 GPU 쪽이라 되살릴 수 없다 -> 호출자 재공급 필요)
+void ImageRenderLayer::RestoreImageAfterDeviceLoss()
+{
+	if (m_inputSource != ImageInputSource::RawImage)
+		return;
+
+	if (!m_image || m_image->IsEmpty())
+		return;
+
+	const uint8_t* data = m_image->ImageBuffer();
+	const uint32_t width = m_image->Width();
+	const uint32_t height = m_image->Height();
+	const uint32_t stride = m_image->Stride();
+	const uint32_t channel = m_image->Channel();
+
+	if (!data || width == 0 || height == 0)
+		return;
+
+	// UpdateImage 는 판정부터 다시 하므로 모드/포맷/풀이 일관되게 재구성된다.
+	// (카메라는 UpdateImageState 가 크기 변화 없음을 보고 Fit 을 건너뛴다)
+	UpdateImage(data, width, height, stride, channel, GetAttachedBitDepth());
+}
+
+uint32_t ImageRenderLayer::GetAttachedBitDepth() const
+{
+	if (!m_image)
+		return 8;
+
+	switch (m_image->GetPixelType())
+	{
+	case PixelType::U16: return 16;
+	case PixelType::F32: return 32;
+	case PixelType::U8:
+	default:             return 8;
 	}
 }
 
@@ -228,7 +313,7 @@ bool ImageRenderLayer::IsImageRenderDirty() const
 	return m_tileManager->HasPendingUploads();
 }
 
-bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
+bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth)
 {
 	if (!data || width == 0 || height == 0 || stride == 0)
 		return false;
@@ -236,11 +321,22 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 	if (channel != 1 && channel != 3 && channel != 4)
 		return false;
 
-	// 현재는 8bit 소스만 들어온다(ImageBase::Attach 에 8 을 넘김).
-	// 16bit Gray 를 받게 되면 이 값만 바꾸면 R16_UNORM 경로가 살아난다.
-	constexpr uint32_t kSourceBitDepth = 8;
+	if (bitDepth != 8 && bitDepth != 16)
+		return false;
 
-	const DXGI_FORMAT format = TileFormat::ResolveTextureFormat(channel, kSourceBitDepth);
+	// 16bit 은 Gray 만 받는다. 3채널은 D3D11 에 48bit 포맷이 아예 없고,
+	// 4채널은 R16G16B16A16_UNORM 이 있긴 하지만 TileSampler 와 픽셀 셰이더가
+	// 아직 8bit 만 다룬다. 조용히 깨진 화면을 내놓는 대신 거절한다.
+	if (bitDepth == 16 && channel != 1)
+		return false;
+
+	// stride 가 최소 한 줄을 담을 수 있어야 한다. 16bit 소스에 8bit stride 가
+	// 들어오는 실수를 여기서 걸러야 이후 샘플링이 버퍼를 넘지 않는다.
+	const uint32_t minimumStride = width * channel * (bitDepth / 8);
+	if (stride < minimumStride)
+		return false;
+
+	const DXGI_FORMAT format = TileFormat::ResolveTextureFormat(channel, bitDepth);
 
 	// Single(전량 상주) 가능 여부.
 	//   1) 변 단위 하드 한계(16384)
@@ -293,7 +389,7 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 		}
 
 		// maxLOD / 용량 / 포맷이 모두 이미지 의존이므로 여기서 풀을 재구성한다.
-		if (!m_tileManager->Configure(width, height, channel, kSourceBitDepth, viewWidth, viewHeight))
+		if (!m_tileManager->Configure(width, height, channel, bitDepth, viewWidth, viewHeight))
 			return false;
 
 		// 가장 거친 LOD 전체를 먼저 채운다. 이게 끝나기 전에는 이미지를 그리지
@@ -309,7 +405,7 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 	// Update image metadata and buffer ownership.
 	if (m_image)
 	{
-		m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, kSourceBitDepth);
+		m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, bitDepth);
 	}
 
 	// Update camera state only when the image source or size changes.
@@ -507,7 +603,8 @@ FAIL:
 void ImageRenderLayer::ReleaseDeviceResources()
 {
 	SafeRelease(m_samplerPoint);
-	SafeRelease(m_samplerLinearMip);
+	SafeRelease(m_samplerSingleLinear);
+	SafeRelease(m_samplerSingleMagPoint);
 
 	SafeRelease(m_constantBuffer);
 	SafeRelease(m_wireColorBuffer);
@@ -782,10 +879,30 @@ bool ImageRenderLayer::CreateSampler()
 	if (FAILED(hr))
 		return false;
 
-	// Single 전용: 축소는 LINEAR + 밉 보간(에일리어싱/지글거림 제거),
-	// 확대는 POINT(검사용으로 픽셀 경계를 흐리지 않음).
+	// ── Single 전용 샘플러 2종
+	//
+	// 축소는 둘 다 LINEAR + 밉 보간이다(축소 에일리어싱 제거). 갈리는 건
+	// 확대 필터뿐이고, SetCommonShaderStates 가 배율을 보고 고른다.
+	//
+	// 왜 배율로 나누는가:
+	//   - LINEAR 확대는 배율이 연속 변해도 부드럽지만 픽셀 경계가 흐려져
+	//     검사에 쓰기 어렵다.
+	//   - POINT 확대는 픽셀 경계가 살지만, 배율이 변하는 동안 텍셀->픽셀
+	//     대응이 정수 단위로 흔들려 블록이 튀는 것처럼 보인다.
+	//
+	// 원래 코드는 D3D 의 기본 동작(zoom 1.0)에서 갈렸는데, 그 지점이 하필
+	// fit -> 1:1 애니메이션이 매번 지나가는 구간이었다(1024px 이미지의 fit 은
+	// 0.94 로 실측됨). 그래서 임계를 1.0 보다 충분히 위로 올린다.
+
+	// 부드러운 쪽: 낮은 배율에서 사용
+	sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	hr = m_device->CreateSamplerState(&sd, &m_samplerSingleLinear);
+	if (FAILED(hr))
+		return false;
+
+	// 선명한 쪽: 픽셀을 봐야 하는 높은 배율에서 사용
 	sd.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
-	hr = m_device->CreateSamplerState(&sd, &m_samplerLinearMip);
+	hr = m_device->CreateSamplerState(&sd, &m_samplerSingleMagPoint);
 
 	return SUCCEEDED(hr);
 }
@@ -814,17 +931,33 @@ bool ImageRenderLayer::CreateRasterizerState()
 
 bool ImageRenderLayer::CreateTileDynamicBuffer(uint32_t maxTileCount)
 {
+	// 타일 1장 = 삼각형 2개 = 정점 6개.
+	return CreateTileVertexBuffer(maxTileCount * kVerticesPerTile);
+}
+
+bool ImageRenderLayer::CreateTileVertexBuffer(uint32_t vertexCount)
+{
 	SafeRelease(m_tileVertexBuffer);
 
-	m_maxTileVertexCount = maxTileCount * 6;
+	// 실패 시 예전 용량이 남아 있으면 UpdateVertexBuffer 가 없는 버퍼에
+	// 쓰려 하므로 먼저 0 으로 내린다.
+	m_maxTileVertexCount = 0;
+
+	if (!m_device || vertexCount == 0)
+		return false;
 
 	D3D11_BUFFER_DESC bd{};
 	bd.Usage = D3D11_USAGE_DYNAMIC;
-	bd.ByteWidth = static_cast<UINT>(sizeof(GRAPHICS::BatchVertex) * m_maxTileVertexCount);
+	bd.ByteWidth = static_cast<UINT>(sizeof(GRAPHICS::BatchVertex) * vertexCount);
 	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-	return SUCCEEDED(m_device->CreateBuffer(&bd, nullptr, &m_tileVertexBuffer));
+	if (FAILED(m_device->CreateBuffer(&bd, nullptr, &m_tileVertexBuffer)))
+		return false;
+
+	m_maxTileVertexCount = vertexCount;
+
+	return true;
 }
 
 bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format, bool needsComputeUpload)
@@ -1224,8 +1357,28 @@ void ImageRenderLayer::SetCommonShaderStates()
 
 	// Single 은 밉 체인이 있어 LINEAR 축소가 가능하지만, Tiled 는 타일 경계
 	// 이음새 때문에 POINT 를 유지해야 한다.
-	ID3D11SamplerState* sampler =
-		(m_currentMode == RenderMode::Single) ? m_samplerLinearMip : m_samplerPoint;
+	ID3D11SamplerState* sampler = m_samplerPoint;
+
+	if (m_currentMode == RenderMode::Single)
+	{
+		// 확대 필터를 배율로 고른다. 히스테리시스를 둬서 임계 근처를 오갈 때
+		// 프레임마다 필터가 바뀌며 깜빡이는 것을 막는다.
+		const float zoom = m_camera ? m_camera->GetZoom() : 1.0f;
+
+		if (m_magPointActive)
+		{
+			if (zoom < kMagPointExitZoom)
+				m_magPointActive = false;
+		}
+		else
+		{
+			if (zoom >= kMagPointEnterZoom)
+				m_magPointActive = true;
+		}
+
+		sampler = m_magPointActive ? m_samplerSingleMagPoint : m_samplerSingleLinear;
+	}
+
 	m_contextD3D->PSSetSamplers(0, 1, &sampler);
 }
 
@@ -1233,10 +1386,47 @@ void ImageRenderLayer::UpdateVertexBuffer(const std::vector<GRAPHICS::BatchVerte
 {
 	if (vertices.empty()) return;
 
+	// ── 용량 검사
+	//
+	// 예전에는 m_maxTileVertexCount 를 대입만 하고 읽는 곳이 없어서, 아래
+	// memcpy 가 Map 으로 받은 스테이징 영역 밖으로 나갈 수 있었다.
+	// 버퍼는 128 타일(정점 768개) 고정인데 RenderTiled 는 렌더 대상 타일마다
+	// 6 정점을 무제한 push 한다.
+	//
+	// 필요 타일 수는 뷰포트에 비례한다. 프리페치 마진이 타일 한 장이라
+	// 가시 키의 상한은 (ceil(viewW/512)+2) * (ceil(viewH/512)+2) 이고,
+	// 실제 렌더 목록은 상주/업로드 예산 때문에 그보다 작다.
+	// (실측: 5124x1421 뷰포트 + LOD0 에서 35 타일. 상한 계산은 65 였다)
+	// 뷰포트가 커지면 128 을 넘길 수 있으므로 고정 용량으로 두지 않는다.
+	const size_t requiredCount = vertices.size();
+
+	if (requiredCount > kMaxTileVertexLimit)
+	{
+		// 여기까지 오면 뷰포트/프리페치 계산이 깨진 것이다. 잘라 그리는 대신
+		// 이 프레임의 갱신을 포기한다(직전 내용이 그대로 남아 한 프레임 낡는다).
+		return;
+	}
+
+	if (!m_tileVertexBuffer || m_maxTileVertexCount < requiredCount)
+	{
+		// 재생성이 매 프레임 반복되지 않도록 2배씩 키운다.
+		uint32_t newCount = (m_maxTileVertexCount > 0)
+			? m_maxTileVertexCount
+			: (128u * kVerticesPerTile);
+
+		while (newCount < requiredCount)
+		{
+			newCount *= 2;
+		}
+
+		if (!CreateTileVertexBuffer(newCount))
+			return;
+	}
+
 	D3D11_MAPPED_SUBRESOURCE mapped{};
 	if (SUCCEEDED(m_contextD3D->Map(m_tileVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
 	{
-		memcpy(mapped.pData, vertices.data(), sizeof(GRAPHICS::BatchVertex) * vertices.size());
+		memcpy(mapped.pData, vertices.data(), sizeof(GRAPHICS::BatchVertex) * requiredCount);
 		m_contextD3D->Unmap(m_tileVertexBuffer, 0);
 	}
 }

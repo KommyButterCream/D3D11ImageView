@@ -85,6 +85,7 @@ bool ROIRenderLayer::Render()
 
 	ROIRenderContext renderContext = {};
 	renderContext.d2dContext = m_d2dContext;
+	renderContext.d2dFactory = m_d2dFactory;
 	renderContext.strokeBrush = m_strokeBrush;
 	renderContext.fillBrush = m_fillBrush;
 	renderContext.handleFillBrush = m_handleFillBrush;
@@ -132,6 +133,14 @@ bool ROIRenderLayer::Render()
 void ROIRenderLayer::OnDeviceLost()
 {
 	ReleaseDeviceResources();
+
+	// 오브젝트가 캐시한 D2D 지오메트리도 버려야 한다(위 Overlay 와 같은 이유).
+	::AcquireSRWLockExclusive(&m_roiLock);
+	for (auto& object : m_roiObjects)
+	{
+		if (object) object->OnDeviceLost();
+	}
+	::ReleaseSRWLockExclusive(&m_roiLock);
 }
 
 void ROIRenderLayer::OnDeviceRestored()
@@ -351,7 +360,15 @@ bool ROIRenderLayer::AcquireDeviceResources()
 		return false;
 	}
 
+	// 이전 리소스를 먼저 놓고 나서 새로 얻는다.
+	// 순서가 뒤바뀌면 방금 AddRef 한 팩토리를 그대로 놓아버린다.
 	ReleaseDeviceResources();
+
+	m_d2dContext->GetFactory(&m_d2dFactory);
+	if (!m_d2dFactory)
+	{
+		return false;
+	}
 
 	if (FAILED(m_d2dContext->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White), &m_strokeBrush)))
 	{
@@ -382,6 +399,9 @@ void ROIRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_fillBrush);
 	SafeRelease(m_handleFillBrush);
 	SafeRelease(m_handleOutlineBrush);
+
+	// GetFactory() 가 AddRef 하므로 여기서 놓아준다.
+	SafeRelease(m_d2dFactory);
 }
 
 Rect2f ROIRenderLayer::GetVisibleClientRect() const

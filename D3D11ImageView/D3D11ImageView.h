@@ -144,7 +144,18 @@ public:
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
 	void ROIClear();
 
+	// 8bit 소스. bitDepth 를 받는 아래 오버로드에 8 을 넘기는 것과 같다.
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+
+	// bitDepth: 채널당 비트 수. 8 또는 16.
+	//
+	// 16bit 은 Gray(channel == 1) 만 지원한다. R16_UNORM 텍스처로 올라가고
+	// 상태바에도 0~65535 원본값이 그대로 표시된다. 3채널 16bit 은 D3D11 에
+	// 48bit 포맷이 없어서, 4채널 16bit 은 타일 샘플러/셰이더가 아직 다루지
+	// 못해서 거절한다(false 반환).
+	//
+	// stride 는 바이트 단위이며 width * channel * (bitDepth / 8) 이상이어야 한다.
+	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth);
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
@@ -159,6 +170,11 @@ public:
 	// 워커를 배수한 뒤 포인터를 바꾼다. 단, 이전 버퍼를 해제하려면
 	// 교체 후에도 이 함수가 필요하다.
 	void DetachImage();
+
+	// 테스트용: 디바이스 로스트를 강제로 유발한다.
+	// 리스너 통지 -> 리소스 해제 -> 디바이스 재생성 -> 복구 통지까지
+	// 실제 경로가 그대로 실행된다.
+	bool SimulateDeviceLost();
 
 private:
 	D3D11ImageView_Impl* m_impl = nullptr;

@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "ROIRectangleRenderer.h"
 
+#include "ROIUtilities.h"
+
 #include "ROIRenderContext.h"
 
 #include <math.h>
@@ -89,10 +91,10 @@ void ROIRectangleRenderer::Render(const ROIRenderContext& context, bool isSelect
 
 	if (isSelected || isHovered)
 	{
-		DrawHandle(context, { m_rect.left, m_rect.top }, m_strokeColor);
-		DrawHandle(context, { m_rect.right, m_rect.top }, m_strokeColor);
-		DrawHandle(context, { m_rect.left, m_rect.bottom }, m_strokeColor);
-		DrawHandle(context, { m_rect.right, m_rect.bottom }, m_strokeColor);
+		ROIUtilities::DrawHandle(context, { m_rect.left, m_rect.top }, m_strokeColor);
+		ROIUtilities::DrawHandle(context, { m_rect.right, m_rect.top }, m_strokeColor);
+		ROIUtilities::DrawHandle(context, { m_rect.left, m_rect.bottom }, m_strokeColor);
+		ROIUtilities::DrawHandle(context, { m_rect.right, m_rect.bottom }, m_strokeColor);
 	}
 }
 
@@ -220,27 +222,5 @@ D2D1_COLOR_F ROIRectangleRenderer::ConvertColor(COLORREF rgb)
 		static_cast<float>(GetBValue(rgb)) / 255.0f,
 		1.0f
 	};
-}
-
-void ROIRectangleRenderer::DrawHandle(const ROIRenderContext& context, const Point2f& point, D2D1_COLOR_F outlineColor) const
-{
-	if (!context.handleFillBrush || !context.handleOutlineBrush)
-	{
-		return;
-	}
-
-	const float handleHalfSize = context.handleHalfSize;
-	const D2D1_RECT_F handleRect = {
-		point.x - handleHalfSize,
-		point.y - handleHalfSize,
-		point.x + handleHalfSize,
-		point.y + handleHalfSize
-	};
-
-	context.handleFillBrush->SetColor(D2D1::ColorF(D2D1::ColorF::White));
-	context.handleOutlineBrush->SetColor(outlineColor);
-
-	context.d2dContext->FillRectangle(handleRect, context.handleFillBrush);
-	context.d2dContext->DrawRectangle(handleRect, context.handleOutlineBrush, context.strokeWidth);
 }
 

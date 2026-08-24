@@ -71,9 +71,9 @@ void ROIEllipseRenderer::Render(const ROIRenderContext& context, bool isSelected
 		strokeWidth *= 1.5f;
 	}
 
-	const D2D1_POINT_2F center = { m_ellipse.x + 0.5f, m_ellipse.y + 0.5f };
+	const D2D1_POINT_2F center = { m_ellipse.x, m_ellipse.y };
 	const D2D1_ELLIPSE d2dEllipse = D2D1::Ellipse(center, m_ellipse.radiusX, m_ellipse.radiusY);
-	const float angleDeg = m_ellipse.angleRad * 180.0f / 3.14159265358979323846f;
+	const float angleDeg = Core::Util::RadToDeg(m_ellipse.angleRad);
 
 	D2D1_MATRIX_3X2_F originalTransform = {};
 	context.d2dContext->GetTransform(&originalTransform);

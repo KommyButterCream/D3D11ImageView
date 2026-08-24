@@ -96,6 +96,7 @@ struct PendingImageUpdate
 	uint32_t height = 0;
 	uint32_t stride = 0;
 	uint32_t channel = 0;
+	uint32_t bitDepth = 8;
 	ID3D11Texture2D* texture = nullptr;
 	HANDLE sharedHandle = nullptr;
 
@@ -107,6 +108,7 @@ struct PendingImageUpdate
 		height = 0;
 		stride = 0;
 		channel = 0;
+		bitDepth = 8;
 		texture = nullptr;
 		sharedHandle = nullptr;
 	}
@@ -190,12 +192,15 @@ public:
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
 	void ROIClear();
 
-	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth = 8);
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
 	// Attach 된 원본 버퍼 참조를 끊는다. 자세한 계약은 D3D11ImageView.h 참조.
 	void DetachImage();
+
+	// 테스트용 디바이스 로스트 유발.
+	bool SimulateDeviceLost();
 
 public:
 	virtual LRESULT WndProc(UINT message, WPARAM wParam, LPARAM lParam) override;
@@ -217,7 +222,9 @@ private:
 	LRESULT OnLButtonDown(WPARAM wParam, LPARAM lParam);
 	LRESULT OnLButtonUp(WPARAM wParam, LPARAM lParam);
 	LRESULT OnMouseMove(WPARAM wParam, LPARAM lParam);
+	LRESULT OnMouseLeave(WPARAM wParam, LPARAM lParam);
 	LRESULT OnMouseWheel(WPARAM wParam, LPARAM lParam);
+	LRESULT OnCaptureChanged(WPARAM wParam, LPARAM lParam);
 	LRESULT OnNcDestroy(WPARAM wParam, LPARAM lParam);
 	LRESULT OnPaint(WPARAM wParam, LPARAM lParam);
 	LRESULT OnRButtonDown(WPARAM wParam, LPARAM lParam);
@@ -257,17 +264,30 @@ private:
 	void FetchFloatPixel(const ImageBase* image, int32_t x, int32_t y, int32_t channelCount, PixelValue outValue[4]);
 
 	bool GetPixelValueForStatusbar(const ImageBase* image, int32_t x, int32_t y, int32_t channel, PixelValue outValue[4]);
+
+	// UpdateStatusbar: 호출자(UI) 스레드에서 좌표만 예약한다.
+	// ApplyPendingStatusbarUpdate: 렌더 스레드가 Render() 안에서 실제로 반영한다.
+	// 상태바가 읽는 ImageBase / Camera2D / UILabel 텍스트가 모두 렌더 스레드
+	// 소유이므로 갱신 자체를 그쪽으로 넘긴다.
 	void UpdateStatusbar(int32_t mouseX, int32_t mouseY);
-	bool QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	void ApplyPendingStatusbarUpdate();
+	bool QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth);
 	bool QueueTextureUpdate(ID3D11Texture2D* texture);
 	bool QueueSharedTextureUpdate(HANDLE sharedHandle);
 	bool ApplyPendingImageUpdate();
 
 	static bool CALLBACK RenderCallback(void* param);
-	bool Render(uint64_t frameID);
+	// resumedFromIdle: 유휴에서 깨어난 첫 프레임. 애니메이션 보간에서
+	// 유휴 시간을 배제하기 위해 사용한다.
+	bool Render(uint64_t frameID, bool resumedFromIdle);
 
 	static constexpr float m_defaultZoomFactor = 0.15f;
 	MouseButtonMode m_mouseButtonMode = MouseButtonMode::NOTHING;
+
+	// TrackMouseEvent(TME_LEAVE) 무장 여부. WM_MOUSELEAVE 는 한 번 오면
+	// 추적이 풀리므로 OnMouseMove 에서 다시 건다.
+	bool m_isMouseTracking = false;
+
 	Point2i m_lButtonDown = { 0, 0 };
 	Point2i m_lButtonDragPoint = { 0, 0 };
 	Point2i m_rButtonDown = { 0, 0 };
@@ -284,6 +304,12 @@ private:
 
 	std::atomic<bool> m_isDirty = { true };
 	std::atomic<bool> m_hasPendingImageUpdate = { false };
+
+	// 상태바 갱신 예약. UI 스레드가 쓰고 렌더 스레드가 읽는다.
+	// 좌표는 x(하위 32bit) | y(상위 32bit) 로 묶어 한 번에 쓴다.
+	std::atomic<uint64_t> m_pendingStatusbarPos = { 0 };
+	std::atomic<bool> m_hasPendingStatusbarUpdate = { false };
+
 	std::unique_ptr<Camera2D> m_camera = nullptr;
 	D3D11RenderEngine* m_renderEngine = nullptr;
 	bool m_ownsRenderEngine = false;

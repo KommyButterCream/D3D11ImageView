@@ -28,7 +28,6 @@ public:
 	uint32_t GetCapacity() const { return static_cast<uint32_t>(m_storage.size()); }
 
 	Tile* Acquire(const TileKey& key, uint64_t frameID);
-	void Evict(uint64_t frameID, uint64_t frameThreshold);
 	Tile* Find(const TileKey& key);
 	void Clear();
 

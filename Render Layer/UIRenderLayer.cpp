@@ -149,11 +149,40 @@ void UIRenderLayer::OnDeviceRestored()
 	}
 }
 
+// UI 요소들이 들고 있는 FontManager 포인터를 현재 것으로 다시 맞춘다.
+//
+// 엔진은 디바이스 재생성 시 ReleaseDeviceResources() 에서 FontManager 를
+// delete 하고 CreateDeviceResources() 에서 새로 만든다. 요소들은 생성 시점에
+// 받은 raw 포인터를 그대로 들고 있으므로, 복구 후 그대로 두면 해제된 객체를
+// 참조해 use-after-free 가 된다(상태바 첫 라벨에서 실제로 크래시했다).
+void UIRenderLayer::RebindFontManager(FontManager* fontManager)
+{
+	if (!fontManager)
+		return;
+
+	// 컨텍스트 메뉴 버튼
+	if (m_zoomInContextMenuButton)          m_zoomInContextMenuButton->SetFontManager(fontManager);
+	if (m_zoomOutContextMenuButton)         m_zoomOutContextMenuButton->SetFontManager(fontManager);
+	if (m_zoom1To1ContextMenuButton)        m_zoom1To1ContextMenuButton->SetFontManager(fontManager);
+	if (m_zoomFitContextMenuButton)         m_zoomFitContextMenuButton->SetFontManager(fontManager);
+	if (m_imageCenterLineContextMenuButton) m_imageCenterLineContextMenuButton->SetFontManager(fontManager);
+
+	// 상태바 라벨
+	if (m_coordinateLabel) m_coordinateLabel->SetFontManager(fontManager);
+	if (m_colorLabel)      m_colorLabel->SetFontManager(fontManager);
+	if (m_zoomLabel)       m_zoomLabel->SetFontManager(fontManager);
+	if (m_imageSizeLabel)  m_imageSizeLabel->SetFontManager(fontManager);
+}
+
 bool UIRenderLayer::AcquireDeviceResources()
 {
 	D3D11RenderEngine* engine = static_cast<D3D11RenderEngine*>(m_context->GetEngine());
 	if (!engine)
 		return false;
+
+	// 패널을 복구하기 전에 폰트 매니저부터 갱신해야 한다.
+	// 복구 과정에서 텍스트 포맷을 다시 받아오기 때문이다.
+	RebindFontManager(engine->GetFontManager());
 
 	bool arePanelsRestored = true;
 

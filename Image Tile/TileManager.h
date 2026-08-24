@@ -67,6 +67,22 @@ public:
 public:
 	void Initialize(ID3D11Device* device, ID3D11DeviceContext* contextD3D);
 
+	// ── 디바이스 로스트 대응 ─────────────────────────────────
+	//
+	// TilePool 이 들고 있는 ID3D11Texture2D 는 디바이스 종속 리소스다.
+	// 디바이스가 재생성되면 전부 버리고 다시 만들어야 한다.
+	//
+	// TileManager 는 IDeviceEventListener 를 직접 구현하지 않는다.
+	// ImageRenderLayer 가 자기 OnDeviceLost/OnDeviceRestored 안에서 호출해
+	// 순서(레이어 리소스 해제 -> 풀 해제, 디바이스 갱신 -> 레이어 재생성)를
+	// 확실히 통제한다.
+	void OnDeviceLost();
+	void OnDeviceRestored(ID3D11Device* device, ID3D11DeviceContext* contextD3D);
+
+	// 마지막 Configure 인자. 디바이스 복구 후 같은 구성으로 다시 만들 때 쓴다.
+	bool HasLastConfig() const { return m_lastConfigValid; }
+	bool ReapplyLastConfig();
+
 	// 이미지가 바뀔 때마다 호출한다. maxLOD / 용량 / 포맷이 모두 이미지 의존이므로
 	// 여기서 풀을 재구성한다.
 	bool Configure(uint32_t imageWidth, uint32_t imageHeight,
@@ -135,6 +151,19 @@ private:
 
 	uint32_t m_configuredViewWidth = 0;
 	uint32_t m_configuredViewHeight = 0;
+
+	// 디바이스 복구 시 동일 구성으로 재생성하기 위한 마지막 Configure 인자.
+	struct LastConfig
+	{
+		uint32_t imageWidth = 0;
+		uint32_t imageHeight = 0;
+		uint32_t channel = 0;
+		uint32_t bitDepth = 8;
+		uint32_t viewWidth = 0;
+		uint32_t viewHeight = 0;
+	};
+	LastConfig m_lastConfig = {};
+	bool m_lastConfigValid = false;
 
 	std::vector<std::unique_ptr<TilePool>> m_pools;
 	std::vector<Tile*> m_visibleTiles;

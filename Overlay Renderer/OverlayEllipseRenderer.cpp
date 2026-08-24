@@ -2,22 +2,9 @@
 #include "OverlayEllipseRenderer.h"
 
 #include "OverlayRenderContext.h"
+#include "OverlayUtilities.h"
 
 using namespace Core::ShapeType;
-
-namespace
-{
-	float ResolveStrokeWidth(const OverlayRenderContext& context, const OverlayStyle& style)
-	{
-		float strokeWidth = style.strokeWidth;
-		if (context.mode == ImageOverlayMode::ImageSpace && context.scale > 0.0f)
-		{
-			strokeWidth = max(style.strokeWidth / context.scale, 1.0f);
-		}
-
-		return strokeWidth;
-	}
-}
 
 OverlayEllipseRenderer::OverlayEllipseRenderer(const OverlayEllipse& ellipse)
 	: m_ellipse(ellipse)
@@ -48,19 +35,15 @@ void OverlayEllipseRenderer::Render(const OverlayRenderContext& context) const
 	}
 
 	const OverlayStyle& style = m_ellipse.style;
-	const float strokeWidth = ResolveStrokeWidth(context, style);
+	const float strokeWidth = OverlayUtilities::ResolveStrokeWidth(context, style);
 
 	context.strokeBrush->SetColor(style.strokeColorD2D);
 	context.fillBrush->SetColor(style.fillColorD2D);
 
-	const D2D1_POINT_2F center = {
-		m_ellipse.cx + 0.5f,
-		m_ellipse.cy + 0.5f
-	};
+	const D2D1_POINT_2F center = { m_ellipse.cx, m_ellipse.cy };
 
 	const D2D1_ELLIPSE d2dEllipse = D2D1::Ellipse(center, m_ellipse.rx, m_ellipse.ry);
-	constexpr double piValue = 3.14159265358979323846;
-	const float angleDeg = m_ellipse.angleRad * 180.0f / static_cast<float>(piValue);
+	const float angleDeg = Core::Util::RadToDeg(m_ellipse.angleRad);
 
 	D2D1_MATRIX_3X2_F originalTransform = {};
 	context.d2dContext->GetTransform(&originalTransform);

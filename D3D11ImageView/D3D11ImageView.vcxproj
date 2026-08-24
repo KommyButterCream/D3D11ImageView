@@ -62,6 +62,7 @@
     <ClInclude Include="..\Overlay Renderer\OverlayPolyShapeRenderer.h" />
     <ClInclude Include="..\Overlay Renderer\OverlayRectangleRenderer.h" />
     <ClInclude Include="..\Overlay Renderer\OverlayRenderContext.h" />
+    <ClInclude Include="..\Overlay Renderer\OverlayUtilities.h" />
     <ClInclude Include="..\Overlay Renderer\OverlayTypes.h" />
     <ClInclude Include="..\Render Layer\ImageCenterRenderLayer.h" />
     <ClInclude Include="..\Render Layer\ImageRenderLayer.h" />

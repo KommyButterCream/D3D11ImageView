@@ -24,9 +24,6 @@ namespace
 	// 예측할 수 없었다.
 	constexpr double kUploadBudgetMs = 2.0;
 
-	// Evict 임계값(프레임 수). 이보다 오래 안 쓰인 타일은 풀에 반납한다.
-	constexpr uint64_t kEvictFrameThreshold = 600;
-
 	inline uint32_t CeilDiv(uint32_t a, uint32_t b) noexcept
 	{
 		return (b == 0) ? 0 : ((a + b - 1) / b);
@@ -47,6 +44,36 @@ void TileManager::Initialize(ID3D11Device* device, ID3D11DeviceContext* contextD
 {
 	m_device = device;
 	m_contextD3D = contextD3D;
+}
+
+void TileManager::OnDeviceLost()
+{
+	// 풀의 ID3D11Texture2D 는 죽은 디바이스에 묶여 있으므로 전부 버린다.
+	// 구성값(m_lastConfig)은 남겨 복구 후 그대로 재생성한다.
+	ReleasePools();
+
+	m_device = nullptr;
+	m_contextD3D = nullptr;
+}
+
+void TileManager::OnDeviceRestored(ID3D11Device* device, ID3D11DeviceContext* contextD3D)
+{
+	// 예전에는 m_device 가 Initialize 시점 값 그대로여서
+	// 디바이스 재생성 후 죽은 포인터로 텍스처를 만들려 했다.
+	m_device = device;
+	m_contextD3D = contextD3D;
+}
+
+bool TileManager::ReapplyLastConfig()
+{
+	if (!m_lastConfigValid || !m_device)
+		return false;
+
+	const LastConfig config = m_lastConfig;
+
+	return Configure(config.imageWidth, config.imageHeight,
+		config.channel, config.bitDepth,
+		config.viewWidth, config.viewHeight);
 }
 
 bool TileManager::NeedsReconfigure(uint32_t viewWidth, uint32_t viewHeight) const
@@ -87,6 +114,39 @@ bool TileManager::Configure(uint32_t imageWidth, uint32_t imageHeight,
 {
 	if (!m_device || imageWidth == 0 || imageHeight == 0)
 		return false;
+
+	// ── 레이아웃이 동일하면 풀을 다시 만들지 않는다.
+	//
+	// 타일 풀의 구조(maxLOD, LOD별 용량, 포맷, 타일 크기)는 이 여섯 인자만의
+	// 함수다. 카메라가 같은 규격의 프레임을 계속 보내는 경우 바뀌는 것은
+	// 픽셀 데이터뿐이므로, Texture2DArray 를 파괴하고 재생성할 이유가 없다.
+	// (그건 드라이버 할당을 매 프레임 왕복시켜 VRAM 을 파편화한다)
+	//
+	// 대신 상주 정보는 반드시 비운다. 캐시된 타일들은 이전 프레임의 픽셀을
+	// 담고 있어서 그대로 두면 낡은 데이터가 화면에 남는다. ClearPools 는
+	// 룩업/LRU/프리리스트만 되돌리는 CPU 작업이고 텍스처는 건드리지 않는다.
+	//
+	// NeedsReconfigure 로는 이 판정을 대신할 수 없다. 그쪽은 뷰포트만 보고
+	// imageMax 를 '현재 구성된' 이미지에서 읽으므로, 크기가 다른 이미지가
+	// 들어와도 뷰포트가 같으면 false 를 반환한다.
+	if (m_lastConfigValid &&
+		!m_pools.empty() &&
+		m_lastConfig.imageWidth == imageWidth &&
+		m_lastConfig.imageHeight == imageHeight &&
+		m_lastConfig.channel == channel &&
+		m_lastConfig.bitDepth == bitDepth &&
+		m_lastConfig.viewWidth == viewWidth &&
+		m_lastConfig.viewHeight == viewHeight)
+	{
+		ClearPools();
+
+		// ClearPools 는 상주 목록만 되돌린다. 업로드 예약 플래그는 여기서 끈다.
+		m_hasPendingUploads = false;
+
+		// m_lastLOD(히스테리시스)는 유지한다. 카메라가 움직인 게 아니므로
+		// 초기화하면 같은 줌에서 LOD 가 한 번 튄다.
+		return true;
+	}
 
 	ReleasePools();
 
@@ -153,6 +213,10 @@ bool TileManager::Configure(uint32_t imageWidth, uint32_t imageHeight,
 			return false;
 		}
 	}
+
+	// 디바이스 복구 시 동일 구성으로 되살리기 위해 인자를 보관한다.
+	m_lastConfig = { imageWidth, imageHeight, channel, bitDepth, viewWidth, viewHeight };
+	m_lastConfigValid = true;
 
 	m_primed = false;
 	m_hasPendingUploads = false;
@@ -355,13 +419,16 @@ void TileManager::UpdateVisibleTiles(const Core::ShapeType::Rect2i& viewPixelRec
 			oldTile->lastFrameUsed = frameID - 1;
 	}
 
-	// 오래 안 쓰인 타일 반납. 예전에는 이 호출이 주석 처리되어 풀이 절대
-	// 줄지 않았다. maxLOD 풀은 전량 상주가 목적이므로 제외한다.
-	for (uint32_t lod = 0; lod < m_maxLOD; ++lod)
-	{
-		if (m_pools[lod])
-			m_pools[lod]->Evict(frameID, kEvictFrameThreshold);
-	}
+	// 시간 기반 축출은 하지 않는다.
+	//
+	// 풀 슬롯은 Texture2DArray 의 슬라이스이고 ArraySize 는 생성 시점에
+	// 고정된다. 타일을 used 에서 free 로 옮겨도 VRAM 은 한 바이트도 줄지
+	// 않는다. 리스트 사이에서 포인터만 이동할 뿐이다.
+	//
+	// 반면 자리가 필요한 순간에는 AllocateNew 가 EvictLRU 로 가장 오래된
+	// 타일을 재활용한다. 시간 기반 축출이 미리 골랐을 것과 같은 타일이다.
+	// 즉 미리 버려서 얻는 것은 없고, 아직 유효한 캐시만 잃는다.
+	// (팬으로 잠깐 벗어났다 돌아오면 재샘플링 + 재업로드가 발생)
 }
 
 Tile* TileManager::FindAvailableParent(const TileKey& childKey, uint64_t frameID, TileKey& outParentKey)

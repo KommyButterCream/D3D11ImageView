@@ -3,16 +3,19 @@
 #include "../Render Layer/ImageRenderLayer.h"
 #include "../Render Layer/UIRenderLayer.h"
 #include "../Image Tile/TileManager.h"
+#include "../../../Module/D3D11Engine/Core/D3D11RenderContext.h"
 
 using namespace Core::ShapeType;
 using namespace Core::ImageType;
 
-bool D3D11ImageView_Impl::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
+bool D3D11ImageView_Impl::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth)
 {
 	if (!m_imageLayer || !data || width == 0 || height == 0 || stride == 0)
 		return false;
 
-	return QueueImageUpdate(data, width, height, stride, channel);
+	// 포맷 유효성(채널/비트깊이/stride)은 ImageRenderLayer::UpdateImage 가
+	// 판정한다. 여기서 중복 검사하면 두 곳이 갈라질 수 있다.
+	return QueueImageUpdate(data, width, height, stride, channel, bitDepth);
 }
 
 bool D3D11ImageView_Impl::UpdateSharedTexture(HANDLE sharedHandle)
@@ -31,7 +34,7 @@ bool D3D11ImageView_Impl::UpdateTexture(ID3D11Texture2D* texture)
 	return QueueTextureUpdate(texture);
 }
 
-bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel)
+bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth)
 {
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	if (m_pendingImageUpdate.texture)
@@ -45,6 +48,7 @@ bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, 
 	m_pendingImageUpdate.height = height;
 	m_pendingImageUpdate.stride = stride;
 	m_pendingImageUpdate.channel = channel;
+	m_pendingImageUpdate.bitDepth = bitDepth;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
 	m_hasPendingImageUpdate = true;
@@ -149,7 +153,8 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 			pendingUpdate.width,
 			pendingUpdate.height,
 			pendingUpdate.stride,
-			pendingUpdate.channel);
+			pendingUpdate.channel,
+			pendingUpdate.bitDepth);
 
 		if (m_uiLayer && result)
 		{
@@ -199,3 +204,19 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 }
 
 
+
+bool D3D11ImageView_Impl::SimulateDeviceLost()
+{
+	if (!m_renderContext)
+		return false;
+
+	// 렌더 스레드가 프레임 밖에 있을 때 실행해야 한다.
+	// (Render 도 같은 락을 잡는다)
+	::AcquireSRWLockExclusive(&m_renderLock);
+	const bool result = m_renderContext->SimulateDeviceLost();
+	::ReleaseSRWLockExclusive(&m_renderLock);
+
+	InvalidateFrame();
+
+	return result;
+}

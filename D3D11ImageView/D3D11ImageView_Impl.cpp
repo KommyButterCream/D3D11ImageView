@@ -207,7 +207,14 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	// Request Render
 	InvalidateFrame();
 
-	m_renderThread->SetRenderFPS(120.0);
+	// 프레임 페이싱은 Present(vsync) 가 담당한다. 이 값은 안전망 상한이다.
+	//
+	// 화면 주사율 근처(예: 60)로 두면 소프트웨어 타이머와 vblank 가 거의 같은
+	// 주기로 위상 간섭을 일으켜 애니메이션이 오히려 불규칙해진다. 충분히 높게
+	// 잡아 실제 제한은 vblank 가 걸도록 한다.
+	// (D3D11RenderContext::SetVSyncEnabled 로 vsync 를 끄는 경우에는 이 값을
+	//  실제 목표 FPS 로 내려야 한다)
+	m_renderThread->SetRenderFPS(240.0);
 	m_renderThread->SetRenderFunction(&D3D11ImageView_Impl::RenderCallback, this);
 
 	if (!m_renderThread->StartThread())
@@ -309,7 +316,7 @@ ID3D11DeviceContext* D3D11ImageView_Impl::GetDeviceContext() const
 	return m_renderEngine ? m_renderEngine->GetD3DDeviceContext() : nullptr;
 }
 
-bool D3D11ImageView_Impl::Render(uint64_t frameID)
+bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 {
 	if (!m_renderContext)
 		return false;
@@ -324,8 +331,30 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID)
 		return false;
 	}
 
-	const float dt = m_renderContext->GetDeltaTime();
+	// ── 애니메이션에 쓸 delta time
+	//
+	// 엔진 타이머는 Tick 사이의 실제 경과 시간을 준다. 그런데 렌더 스레드는
+	// 할 일이 없으면 잠들기 때문에, 유휴 후 첫 프레임의 dt 에는 유휴 시간이
+	// 통째로 들어있다(타이머가 0.1초로 클램프).
+	//
+	// 그대로 보간에 넣으면 Camera2D 의 보간 속도 14 기준
+	//   k = 1 - exp(-14 * 0.1) = 0.75
+	// 즉 첫 프레임에 목표까지 거리의 75% 를 소비해서, 휠을 한 칸 돌렸을 때
+	// 애니메이션 없이 곧바로 목표 배율로 튀는 것처럼 보인다.
+	// (휠을 연타하면 스레드가 잠들지 않아 dt 가 정상이고 부드럽게 보인다)
+	//
+	// 애니메이션은 휠을 돌린 순간부터 시작해야 하므로, 그 앞의 유휴 시간은
+	// 진행에 포함하지 않는다. 이 프레임은 시작 상태를 그대로 그리고,
+	// 다음 프레임부터 정상 dt 로 보간이 진행된다.
+	const float dt = resumedFromIdle ? 0.0f : m_renderContext->GetDeltaTime();
+
 	const bool isCameraAnimating = m_camera->Update(dt);
+
+	// 이미지 교체와 카메라 갱신 뒤에 반영한다. 그래야 방금 붙은 이미지와
+	// 이 프레임이 실제로 그릴 카메라 상태를 기준으로 좌표/픽셀값을 읽는다.
+	// Prepare() 보다는 앞이어야 바뀐 텍스트의 레이아웃이 이 프레임에 잡힌다.
+	ApplyPendingStatusbarUpdate();
+
 	const bool isUiAnimating = m_uiLayer->Update(dt);
 
 	m_uiLayer->Prepare();
@@ -623,10 +652,40 @@ bool D3D11ImageView_Impl::GetPixelValueForStatusbar(const ImageBase* image, int3
 	return true;
 }
 
+// 호출자(UI) 스레드용. 좌표만 적어두고 프레임을 요청한다.
+//
+// 실제 갱신을 여기서 하면 안 된다. 상태바는 세 가지를 건드리는데
+// 전부 렌더 스레드 소유다.
+//   1) m_imageLayer 의 ImageBase  - 렌더 스레드가 Attach/Detach 로 갈아끼운다
+//   2) m_camera                   - 렌더 스레드가 매 프레임 Update 한다
+//   3) UILabel::m_text            - 렌더 스레드가 DWrite 레이아웃으로 읽는다
+// UI 스레드에서 직접 만지면 (1) 은 해제된 버퍼 역참조, (3) 은 delete[] 된
+// 버퍼 역참조가 된다. 그래서 좌표만 넘기고 판단은 렌더 스레드에 맡긴다.
 void D3D11ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
 {
-	if (!m_camera || !m_uiLayer)
+	// x, y 를 한 번의 원자적 쓰기로 묶어 찢어진 좌표가 보이지 않게 한다.
+	const uint64_t packed =
+		(static_cast<uint64_t>(static_cast<uint32_t>(mouseY)) << 32) |
+		static_cast<uint64_t>(static_cast<uint32_t>(mouseX));
+
+	m_pendingStatusbarPos.store(packed, std::memory_order_relaxed);
+	m_hasPendingStatusbarUpdate.store(true, std::memory_order_release);
+
+	InvalidateFrame();
+}
+
+// 렌더 스레드 전용. Render() 안에서 m_renderLock 을 쥔 채로 호출된다.
+void D3D11ImageView_Impl::ApplyPendingStatusbarUpdate()
+{
+	if (!m_hasPendingStatusbarUpdate.exchange(false, std::memory_order_acquire))
 		return;
+
+	if (!m_camera || !m_uiLayer || !m_imageLayer)
+		return;
+
+	const uint64_t packed = m_pendingStatusbarPos.load(std::memory_order_relaxed);
+	const int32_t mouseX = static_cast<int32_t>(static_cast<uint32_t>(packed & 0xFFFFFFFFull));
+	const int32_t mouseY = static_cast<int32_t>(static_cast<uint32_t>(packed >> 32));
 
 	int32_t imageCoordinateX(0), imageCoordinateY(0);
 
@@ -660,7 +719,9 @@ void D3D11ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
 		//m_uiLayer->ClearStatusbarImagePixelValue();
 	}
 
-	InvalidateFrame();
+	// 여기서 InvalidateFrame 을 부르면 안 된다. 렌더 스레드가 자기 자신을
+	// 다시 더럽혀 프레임이 끝없이 돌아간다. 프레임 요청은 좌표를 적어넣는
+	// UpdateStatusbar 쪽(UI 스레드)이 담당한다.
 }
 
 bool D3D11ImageView_Impl::RenderCallback(void* param)
@@ -670,8 +731,7 @@ bool D3D11ImageView_Impl::RenderCallback(void* param)
 	D3D11ImageView_Impl* D3D11ImageView = static_cast<D3D11ImageView_Impl*>(renderContext->imageViewImpl);
 	if (D3D11ImageView)
 	{
-		uint64_t frameId = renderContext->frameID;
-		return D3D11ImageView->Render(frameId);
+		return D3D11ImageView->Render(renderContext->frameID, renderContext->resumedFromIdle);
 	}
 
 	return false;

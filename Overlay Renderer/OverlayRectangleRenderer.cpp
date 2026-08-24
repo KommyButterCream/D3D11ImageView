@@ -2,22 +2,9 @@
 #include "OverlayRectangleRenderer.h"
 
 #include "OverlayRenderContext.h"
+#include "OverlayUtilities.h"
 
 using namespace Core::ShapeType;
-
-namespace
-{
-	float ResolveStrokeWidth(const OverlayRenderContext& context, const OverlayStyle& style)
-	{
-		float strokeWidth = style.strokeWidth;
-		if (context.mode == ImageOverlayMode::ImageSpace && context.scale > 0.0f)
-		{
-			strokeWidth = max(style.strokeWidth / context.scale, 1.0f);
-		}
-
-		return strokeWidth;
-	}
-}
 
 OverlayRectangleRenderer::OverlayRectangleRenderer(const OverlayRect& rect)
 	: m_rect(rect)
@@ -57,36 +44,37 @@ void OverlayRectangleRenderer::Render(const OverlayRenderContext& context) const
 	}
 
 	const OverlayStyle& style = m_rect.style;
-	const float strokeWidth = ResolveStrokeWidth(context, style);
+	const float strokeWidth = OverlayUtilities::ResolveStrokeWidth(context, style);
 
 	context.strokeBrush->SetColor(style.strokeColorD2D);
 	context.fillBrush->SetColor(style.fillColorD2D);
 
-	const D2D1_POINT_2F point1{ m_rect.p1.x + 0.5f, m_rect.p1.y + 0.5f };
-	const D2D1_POINT_2F point2{ m_rect.p2.x + 0.5f, m_rect.p2.y + 0.5f };
-	const D2D1_POINT_2F point3{ m_rect.p3.x + 0.5f, m_rect.p3.y + 0.5f };
-	const D2D1_POINT_2F point4{ m_rect.p4.x + 0.5f, m_rect.p4.y + 0.5f };
+	const D2D1_POINT_2F point1{ m_rect.p1.x, m_rect.p1.y };
+	const D2D1_POINT_2F point2{ m_rect.p2.x, m_rect.p2.y };
+	const D2D1_POINT_2F point3{ m_rect.p3.x, m_rect.p3.y };
+	const D2D1_POINT_2F point4{ m_rect.p4.x, m_rect.p4.y };
 
 	if (!style.transparentFill)
 	{
-		ID2D1PathGeometry* geometry = nullptr;
-		ID2D1GeometrySink* sink = nullptr;
-
-		if (SUCCEEDED(context.d2dFactory->CreatePathGeometry(&geometry)) &&
-			SUCCEEDED(geometry->Open(&sink)))
+		// 도형이 불변이므로 한 번만 만들고 계속 재사용한다.
+		// 실패했으면 매 프레임 다시 시도하지 않는다.
+		if (!m_geometry && !m_geometryBuildFailed)
 		{
-			sink->BeginFigure(point1, D2D1_FIGURE_BEGIN_FILLED);
-			sink->AddLine(point2);
-			sink->AddLine(point3);
-			sink->AddLine(point4);
-			sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-			sink->Close();
+			const D2D1_POINT_2F points[4] = { point1, point2, point3, point4 };
 
-			context.d2dContext->FillGeometry(geometry, context.fillBrush);
-			context.d2dContext->DrawGeometry(geometry, context.strokeBrush, strokeWidth);
+			m_geometry = OverlayUtilities::CreatePolyGeometry(
+				context.d2dFactory, points, 4, true);
 
-			sink->Release();
-			geometry->Release();
+			if (!m_geometry)
+			{
+				m_geometryBuildFailed = true;
+			}
+		}
+
+		if (m_geometry)
+		{
+			context.d2dContext->FillGeometry(m_geometry, context.fillBrush);
+			context.d2dContext->DrawGeometry(m_geometry, context.strokeBrush, strokeWidth);
 		}
 	}
 	else
@@ -98,3 +86,17 @@ void OverlayRectangleRenderer::Render(const OverlayRenderContext& context) const
 	}
 }
 
+
+OverlayRectangleRenderer::~OverlayRectangleRenderer()
+{
+	SafeRelease(m_geometry);
+}
+
+void OverlayRectangleRenderer::OnDeviceLost()
+{
+	// 지오메트리는 ID2D1Factory 소속인데, 이 엔진은 디바이스 재생성 시
+	// D2D 팩토리까지 다시 만든다. 옛 팩토리의 지오메트리를 새 컨텍스트로
+	// 그리면 D2DERR_WRONG_FACTORY 가 나므로 버리고 다시 만들게 한다.
+	SafeRelease(m_geometry);
+	m_geometryBuildFailed = false;
+}

@@ -2,22 +2,9 @@
 #include "OverlayPointRenderer.h"
 
 #include "OverlayRenderContext.h"
+#include "OverlayUtilities.h"
 
 using namespace Core::ShapeType;
-
-namespace
-{
-	float ResolveStrokeWidth(const OverlayRenderContext& context, const OverlayStyle& style)
-	{
-		float strokeWidth = style.strokeWidth;
-		if (context.mode == ImageOverlayMode::ImageSpace && context.scale > 0.0f)
-		{
-			strokeWidth = max(style.strokeWidth / context.scale, 1.0f);
-		}
-
-		return strokeWidth;
-	}
-}
 
 OverlayPointRenderer::OverlayPointRenderer(const OverlayPoint& point)
 	: m_point(point)
@@ -44,8 +31,8 @@ void OverlayPointRenderer::Render(const OverlayRenderContext& context) const
 
 	context.strokeBrush->SetColor(m_point.style.strokeColorD2D);
 
-	const float strokeWidth = ResolveStrokeWidth(context, m_point.style);
-	const D2D1_POINT_2F point = { m_point.x + 0.5f, m_point.y + 0.5f };
+	const float strokeWidth = OverlayUtilities::ResolveStrokeWidth(context, m_point.style);
+	const D2D1_POINT_2F point = { m_point.x, m_point.y };
 
 	if (context.scale >= 3.0f)
 	{

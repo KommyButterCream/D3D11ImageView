@@ -26,7 +26,6 @@ public:
 private:
 	static float DistanceToPoint(const Core::ShapeType::Point2f& point1, const Core::ShapeType::Point2f& point2);
 	static D2D1_COLOR_F ConvertColor(COLORREF rgb);
-	void DrawHandle(const ROIRenderContext& context, const Core::ShapeType::Point2f& point, D2D1_COLOR_F outlineColor) const;
 
 private:
 	std::wstring m_key;

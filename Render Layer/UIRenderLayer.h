@@ -49,6 +49,7 @@ public:
 
 
 private:
+	void RebindFontManager(FontManager* fontManager);
 	bool AcquireDeviceResources();
 	void ReleaseDeviceResources();
 

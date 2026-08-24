@@ -17,6 +17,7 @@
 class Camera2D;
 class IRenderContext;
 struct ID2D1DeviceContext;
+struct ID2D1Factory;
 struct ID2D1SolidColorBrush;
 
 class ROIRenderLayer
@@ -71,6 +72,10 @@ private:
 private:
 	IRenderContext* m_context = nullptr;
 	ID2D1DeviceContext* m_d2dContext = nullptr;
+
+	// 경로 지오메트리 생성용. 예전에는 ROIPolygonRenderer 가 매 프레임
+	// d2dContext->GetFactory() 로 얻어 쓰고 Release 했다.
+	ID2D1Factory* m_d2dFactory = nullptr;
 	const Camera2D* m_camera = nullptr;
 
 	ID2D1SolidColorBrush* m_strokeBrush = nullptr;

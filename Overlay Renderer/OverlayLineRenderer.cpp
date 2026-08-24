@@ -2,22 +2,9 @@
 #include "OverlayLineRenderer.h"
 
 #include "OverlayRenderContext.h"
+#include "OverlayUtilities.h"
 
 using namespace Core::ShapeType;
-
-namespace
-{
-	float ResolveStrokeWidth(const OverlayRenderContext& context, const OverlayStyle& style)
-	{
-		float strokeWidth = style.strokeWidth;
-		if (context.mode == ImageOverlayMode::ImageSpace && context.scale > 0.0f)
-		{
-			strokeWidth = max(style.strokeWidth / context.scale, 1.0f);
-		}
-
-		return strokeWidth;
-	}
-}
 
 OverlayLineRenderer::OverlayLineRenderer(const OverlayLine& line)
 	: m_line(line)
@@ -49,9 +36,9 @@ void OverlayLineRenderer::Render(const OverlayRenderContext& context) const
 
 	context.strokeBrush->SetColor(m_line.style.strokeColorD2D);
 
-	const float strokeWidth = ResolveStrokeWidth(context, m_line.style);
-	const D2D1_POINT_2F beginPoint = { m_line.x1 + 0.5f, m_line.y1 + 0.5f };
-	const D2D1_POINT_2F endPoint = { m_line.x2 + 0.5f, m_line.y2 + 0.5f };
+	const float strokeWidth = OverlayUtilities::ResolveStrokeWidth(context, m_line.style);
+	const D2D1_POINT_2F beginPoint = { m_line.x1, m_line.y1 };
+	const D2D1_POINT_2F endPoint = { m_line.x2, m_line.y2 };
 
 	context.d2dContext->DrawLine(beginPoint, endPoint, context.strokeBrush, strokeWidth);
 }

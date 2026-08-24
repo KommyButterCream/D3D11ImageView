@@ -147,6 +147,19 @@ bool OverlayRenderLayer::Render()
 void OverlayRenderLayer::OnDeviceLost()
 {
 	ReleaseDeviceResources();
+
+	// 오브젝트가 캐시한 D2D 지오메트리도 버려야 한다.
+	// 디바이스 재생성 시 D2D 팩토리까지 새로 만들어지므로,
+	// 옛 팩토리의 지오메트리는 D2DERR_WRONG_FACTORY 를 낸다.
+	for (auto& object : m_imageOverlayObjects)
+	{
+		if (object) object->OnDeviceLost();
+	}
+
+	for (auto& object : m_windowOverlayObjects)
+	{
+		if (object) object->OnDeviceLost();
+	}
 }
 
 void OverlayRenderLayer::OnDeviceRestored()

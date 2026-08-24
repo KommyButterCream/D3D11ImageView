@@ -70,7 +70,7 @@ void ROICircleRenderer::Render(const ROIRenderContext& context, bool isSelected,
 		strokeWidth *= 1.5f;
 	}
 
-	const D2D1_ELLIPSE ellipse = D2D1::Ellipse({ m_circle.x + 0.5f, m_circle.y + 0.5f }, m_circle.radius, m_circle.radius);
+	const D2D1_ELLIPSE ellipse = D2D1::Ellipse({ m_circle.x, m_circle.y }, m_circle.radius, m_circle.radius);
 
 	context.d2dContext->FillEllipse(ellipse, context.fillBrush);
 	context.d2dContext->DrawEllipse(ellipse, context.strokeBrush, strokeWidth);

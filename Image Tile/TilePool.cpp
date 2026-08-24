@@ -82,32 +82,6 @@ Tile* TilePool::Acquire(const TileKey& key, uint64_t frameID)
 	return AllocateNew(key, frameID);
 }
 
-void TilePool::Evict(uint64_t frameID, uint64_t frameThreshold)
-{
-	auto it = m_usedList.rbegin();
-	while (it != m_usedList.rend())
-	{
-		Tile* tile = *it;
-
-		// frameID 가 아직 threshold 만큼 진행되지 않았으면 언더플로가 나므로 먼저 막는다.
-		if (frameID < frameThreshold)
-			break;
-
-		if (tile->lastFrameUsed > (frameID - frameThreshold))
-			break;
-
-		auto eraseIt = std::next(it).base();
-		m_lookup.erase(tile->key);
-		m_usedList.erase(eraseIt);
-
-		tile->state = TileState::None;
-		tile->key = TileKey{};
-		m_freeList.push_back(tile);
-
-		it = m_usedList.rbegin();
-	}
-}
-
 Tile* TilePool::Find(const TileKey& key)
 {
 	auto it = m_lookup.find(key);

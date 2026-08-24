@@ -79,7 +79,10 @@ public:
 
 	bool IsImageRenderDirty() const;
 
-	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel);
+	// bitDepth: 채널당 비트 수. 8 또는 16.
+	// 16 은 Gray(channel == 1) 만 지원한다. D3D11 에 16bit 3채널 포맷이 없고
+	// 4채널(R16G16B16A16)은 타일 샘플러와 픽셀 셰이더가 아직 다루지 못한다.
+	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth = 8);
 	bool UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height);
 	bool UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height);
 
@@ -99,10 +102,19 @@ private:
 	bool CreateSampler();
 	bool CreateRasterizerState();
 	bool CreateTileDynamicBuffer(uint32_t maxTileCount);
+	// 정점 개수로 직접 만든다. 용량이 부족할 때 UpdateVertexBuffer 가 호출한다.
+	bool CreateTileVertexBuffer(uint32_t vertexCount);
 	// needsComputeUpload: 컴퓨트 셰이더가 UAV 로 mip 0 에 써야 하는가.
 	//   BIND_UNORDERED_ACCESS 가 붙으면 드라이버가 텍스처 무손실 압축을 끄는
 	//   경우가 많아 샘플링 대역폭이 나빠지므로, 실제로 CS 를 쓸 때만 켠다.
 	//   (3채널 BGR 확장만 해당. 1/4채널은 UpdateSubresource 직행)
+	// 디바이스 복구 후 원본 CPU 버퍼로 화면을 되살린다.
+	void RestoreImageAfterDeviceLoss();
+
+	// 현재 Attach 된 이미지의 채널당 비트 수. ImageBase 는 PixelType 만
+	// 노출하므로 거기서 되돌린다. 이미지가 없으면 8 을 준다.
+	uint32_t GetAttachedBitDepth() const;
+
 	bool CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format, bool needsComputeUpload);
 	void GenerateSingleMips();
 	void ReleaseUnusedModeResources(RenderMode activeMode);
@@ -149,7 +161,12 @@ private:
 	// CLAMP 되므로 LINEAR 축소를 걸면 타일마다 테두리 텍셀이 번져 이음새가 보인다.
 	ID3D11SamplerState* m_samplerPoint = nullptr;
 	// Single 은 밉 체인이 있으므로 축소는 LINEAR+MIP, 확대는 POINT(픽셀 경계 보존).
-	ID3D11SamplerState* m_samplerLinearMip = nullptr;
+	// Single 축소는 항상 LINEAR + 밉 보간. 확대만 아래 두 개로 갈린다.
+	ID3D11SamplerState* m_samplerSingleLinear = nullptr;    // 확대 LINEAR
+	ID3D11SamplerState* m_samplerSingleMagPoint = nullptr;  // 확대 POINT
+
+	// 현재 POINT 확대를 쓰고 있는가(히스테리시스 상태).
+	bool m_magPointActive = false;
 
 	// Rasterizer
 	ID3D11RasterizerState* m_rasterizerSolid = nullptr;
@@ -166,6 +183,11 @@ private:
 	uint32_t m_texHeight = 0;
 	DXGI_FORMAT m_texFormat = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
 	bool m_initialized = false;
+
+	// 디바이스 로스트 ~ 복구 사이에는 false. 이 구간에 Render 가 들어오면
+	// 죽은 디바이스의 리소스를 참조하게 되므로 그리지 않는다.
+	bool m_deviceResourcesReady = true;
+
 	ImageInputSource m_inputSource = ImageInputSource::None;
 	uint32_t m_inputChannel = 0;
 

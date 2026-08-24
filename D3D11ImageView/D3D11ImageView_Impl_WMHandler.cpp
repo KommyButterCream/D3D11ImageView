@@ -33,7 +33,9 @@ LRESULT D3D11ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_LBUTTONDOWN:	return OnLButtonDown(wParam, lParam);
 	case WM_LBUTTONUP:		return OnLButtonUp(wParam, lParam);
 	case WM_MOUSEMOVE:		return OnMouseMove(wParam, lParam);
+	case WM_MOUSELEAVE:		return OnMouseLeave(wParam, lParam);
 	case WM_MOUSEWHEEL:		return OnMouseWheel(wParam, lParam);
+	case WM_CAPTURECHANGED:	return OnCaptureChanged(wParam, lParam);
 	case WM_NCDESTROY:		return OnNcDestroy(wParam, lParam);
 	case WM_PAINT:			return OnPaint(wParam, lParam);
 	case WM_RBUTTONDOWN:	return OnRButtonDown(wParam, lParam);
@@ -201,6 +203,21 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
+	// WM_MOUSELEAVE 를 한 번 받으려면 매번 다시 무장해야 한다.
+	// (TME_LEAVE 는 한 번 발생하면 자동으로 해제된다)
+	if (!m_isMouseTracking)
+	{
+		TRACKMOUSEEVENT trackMouseEvent = {};
+		trackMouseEvent.cbSize = sizeof(trackMouseEvent);
+		trackMouseEvent.dwFlags = TME_LEAVE;
+		trackMouseEvent.hwndTrack = m_hWnd;
+
+		if (::TrackMouseEvent(&trackMouseEvent))
+		{
+			m_isMouseTracking = true;
+		}
+	}
+
 	const UIEventResult uiEventResult = HandleMouseEventUI(UIMouseEventType::Move, mousePosition.x, mousePosition.y);
 
 	if (uiEventResult != UIEventResult::None)
@@ -244,6 +261,82 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 	}
 
 	m_rButtonDown = mousePosition;
+
+	return 0L;
+}
+
+// 마우스가 창을 벗어났다.
+//
+// TrackMouseEvent 를 걸어두지 않으면 이 메시지가 오지 않아서, hover 하이라이트와
+// 상태바 픽셀값이 마지막 값에 그대로 멈춘다. OnMouseMove 에서 매번 추적을
+// 재무장하고 여기서 정리한다.
+LRESULT D3D11ImageView_Impl::OnMouseLeave(WPARAM wParam, LPARAM lParam)
+{
+	m_isMouseTracking = false;
+
+	// UI 요소의 hover 상태를 푼다. 좌표는 창 밖이므로 어떤 요소에도
+	// 맞지 않는 값을 준다.
+	HandleMouseEventUI(UIMouseEventType::Leave, -1, -1);
+
+	if (m_roiLayer)
+	{
+		// ROI hover 해제. 드래그 중이면 캡처가 살아 있어 애초에
+		// WM_MOUSELEAVE 가 오지 않는다.
+		if (m_roiLayer->OnMouseMove(-1.0f, -1.0f))
+		{
+			InvalidateFrame();
+		}
+	}
+
+	// 상태바를 창 밖 상태로 갱신 (좌표/픽셀값은 유지하고 줌만 반영)
+	UpdateStatusbar(-1, -1);
+
+	return 0L;
+}
+
+// 캡처를 잃었다.
+//
+// 팬/선택/ROI 편집은 모두 SetCapture 를 잡고 시작하는데, Alt+Tab 이나 다른
+// 창이 캡처를 가져가면 WM_LBUTTONUP / WM_RBUTTONUP 이 오지 않는다. 그러면
+// m_mouseButtonMode 가 그대로 남아 버튼을 뗀 뒤에도 팬이 계속되는 것처럼
+// 보인다. 여기서 진행 중이던 동작을 정리한다.
+LRESULT D3D11ImageView_Impl::OnCaptureChanged(WPARAM wParam, LPARAM lParam)
+{
+	// 우리가 캡처를 얻는 경우는 정리 대상이 아니다.
+	if (reinterpret_cast<HWND>(lParam) == m_hWnd)
+		return 0L;
+
+	if (m_mouseButtonMode == MouseButtonMode::NOTHING)
+		return 0L;
+
+	// 마지막으로 알던 위치로 진행 중인 동작을 닫는다.
+	switch (m_mouseButtonMode)
+	{
+	case MouseButtonMode::LBUTTON_ROI_EDIT:
+		if (m_roiLayer)
+		{
+			m_roiLayer->OnLButtonUp(
+				static_cast<float>(m_lButtonDragPoint.x),
+				static_cast<float>(m_lButtonDragPoint.y));
+		}
+		break;
+
+	case MouseButtonMode::LBUTTON_SELECTION:
+		EndSelection(m_lButtonDragPoint);
+		break;
+
+	case MouseButtonMode::RBUTTON_PANNING:
+		EndPan(m_rButtonDown.x, m_rButtonDown.y);
+		::SetCursor(::LoadCursor(nullptr, IDC_ARROW));
+		break;
+
+	default:
+		break;
+	}
+
+	m_mouseButtonMode = MouseButtonMode::NOTHING;
+
+	InvalidateFrame();
 
 	return 0L;
 }
