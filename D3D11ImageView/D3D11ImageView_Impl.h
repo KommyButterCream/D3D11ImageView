@@ -371,6 +371,11 @@ private:
 	// 소유이므로 갱신 자체를 그쪽으로 넘긴다.
 	void UpdateStatusbar(int32_t mouseX, int32_t mouseY);
 	void ApplyPendingStatusbarUpdate();
+
+	// 배율 라벨만 따로 본다. 좌표/픽셀값과 달리 배율은 마우스와 무관하게
+	// 바뀐다 — 툴바, 그리고 호스트의 SetZoom/ZoomFit/ZoomToRect 와 그 애니메이션.
+	// 마우스 이벤트에만 묶어두면 호스트가 뷰를 옮긴 뒤 라벨이 이전 값으로 남는다.
+	void UpdateStatusbarZoomIfChanged();
 	bool QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth);
 	bool QueueTextureUpdate(ID3D11Texture2D* texture);
 	bool QueueSharedTextureUpdate(HANDLE sharedHandle);
@@ -420,6 +425,10 @@ private:
 	// 좌표는 x(하위 32bit) | y(상위 32bit) 로 묶어 한 번에 쓴다.
 	std::atomic<uint64_t> m_pendingStatusbarPos = { 0 };
 	std::atomic<bool> m_hasPendingStatusbarUpdate = { false };
+
+	// 렌더 스레드 전용. 마지막으로 라벨에 넣은 배율(%)을 0.01 단위 정수로 보관한다.
+	// 라벨이 "%.2f %%" 로 찍으므로 그보다 작은 변화는 다시 쓸 이유가 없다.
+	int32_t m_lastStatusbarZoomCenti = INT32_MIN;
 
 	std::unique_ptr<Camera2D> m_camera = nullptr;
 	D3D11RenderEngine* m_renderEngine = nullptr;

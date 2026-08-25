@@ -357,6 +357,7 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 	// 이 프레임이 실제로 그릴 카메라 상태를 기준으로 좌표/픽셀값을 읽는다.
 	// Prepare() 보다는 앞이어야 바뀐 텍스트의 레이아웃이 이 프레임에 잡힌다.
 	ApplyPendingStatusbarUpdate();
+	UpdateStatusbarZoomIfChanged();
 
 	const bool isUiAnimating = m_uiLayer->Update(dt);
 
@@ -678,6 +679,25 @@ void D3D11ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
 }
 
 // 렌더 스레드 전용. Render() 안에서 m_renderLock 을 쥔 채로 호출된다.
+//
+// 배율 라벨은 마우스와 무관하게 바뀐다. 휠은 마우스 이벤트를 동반하지만
+// 툴바 버튼과 호스트의 SetZoom/ZoomFit/ZoomToRect 는 그렇지 않고, 애니메이션
+// 중에는 값이 프레임마다 변한다. 그래서 이벤트가 아니라 매 프레임 비교한다.
+void D3D11ImageView_Impl::UpdateStatusbarZoomIfChanged()
+{
+	if (!m_camera || !m_uiLayer)
+		return;
+
+	const int32_t centi = static_cast<int32_t>(
+		lroundf(m_camera->GetZoomPercent() * 100.0f));
+
+	if (centi == m_lastStatusbarZoomCenti)
+		return;
+
+	m_lastStatusbarZoomCenti = centi;
+	m_uiLayer->UpdateStatusbarImageZoom(m_camera->GetZoomPercent());
+}
+
 void D3D11ImageView_Impl::ApplyPendingStatusbarUpdate()
 {
 	if (!m_hasPendingStatusbarUpdate.exchange(false, std::memory_order_acquire))
@@ -692,7 +712,8 @@ void D3D11ImageView_Impl::ApplyPendingStatusbarUpdate()
 
 	int32_t imageCoordinateX(0), imageCoordinateY(0);
 
-	m_uiLayer->UpdateStatusbarImageZoom(m_camera->GetZoomPercent());
+	// 배율은 여기서 다루지 않는다. UpdateStatusbarZoomIfChanged 가 매 프레임
+	// 본다 — 배율은 마우스 없이도 바뀌기 때문이다.
 
 	if (mouseX >= 0 && mouseY >= 0 &&
 		m_camera->ScreenToImagePixel(
