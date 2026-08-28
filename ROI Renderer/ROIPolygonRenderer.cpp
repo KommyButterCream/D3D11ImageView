@@ -18,7 +18,7 @@ ROIPolygonRenderer::~ROIPolygonRenderer()
 	SafeRelease(m_geometry);
 }
 
-bool ROIPolygonRenderer::UpdateDefinition(const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIPolygonRenderer::UpdateDefinition(const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!polygon.IsValid())
 	{
@@ -64,7 +64,7 @@ uint32_t ROIPolygonRenderer::GetColorRGB() const
 
 int32_t ROIPolygonRenderer::GetFontSize() const
 {
-	return static_cast<int32_t>(m_fontSize);
+	return m_fontSize;
 }
 
 void ROIPolygonRenderer::GetShape(ROIShapeData& outShape) const

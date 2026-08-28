@@ -41,20 +41,17 @@ bool D3D11ImageView_Impl::ROIGetBounds(const wchar_t* key, Rect2f& outBounds) co
 	return m_roiLayer ? m_roiLayer->ROIGetBounds(key, outBounds) : false;
 }
 
-bool D3D11ImageView_Impl::ROIGetInfo(const wchar_t* key,
-	ROIRenderLayer::ROIInfoData& outInfo) const
+bool D3D11ImageView_Impl::ROIGetInfo(const wchar_t* key, ROIRenderLayer::ROIInfoData& outInfo) const
 {
 	return m_roiLayer ? m_roiLayer->ROIGetInfo(key, outInfo) : false;
 }
 
-uint32_t D3D11ImageView_Impl::ROIGetName(const wchar_t* key,
-	wchar_t* buffer, uint32_t bufferChars) const
+uint32_t D3D11ImageView_Impl::ROIGetName(const wchar_t* key, wchar_t* buffer, uint32_t bufferChars) const
 {
 	return m_roiLayer ? m_roiLayer->ROIGetName(key, buffer, bufferChars) : 0u;
 }
 
-uint32_t D3D11ImageView_Impl::ROIGetKeyAt(uint32_t index,
-	wchar_t* buffer, uint32_t bufferChars) const
+uint32_t D3D11ImageView_Impl::ROIGetKeyAt(uint32_t index, wchar_t* buffer, uint32_t bufferChars) const
 {
 	return m_roiLayer ? m_roiLayer->ROIGetKeyAt(index, buffer, bufferChars) : 0u;
 }
@@ -84,8 +81,7 @@ bool D3D11ImageView_Impl::ROIRemove(const wchar_t* key)
 	return removed;
 }
 
-void D3D11ImageView_Impl::SetROIEventHandler(ROIRenderLayer::ROIEventHandler handler,
-	void* userData)
+void D3D11ImageView_Impl::SetROIEventHandler(ROIRenderLayer::ROIEventHandler handler, void* userData)
 {
 	// Initialize 전에도 등록할 수 있어야 한다. C# 래퍼처럼 생성 직후
 	// 콜백부터 붙이는 호스트가 흔하다. 보관해 두고 레이어가 생기면 옮긴다.
@@ -250,18 +246,15 @@ bool D3D11ImageView_Impl::GetVisibleImageRect(Rect2f& outRect) const
 	return true;
 }
 
-bool D3D11ImageView_Impl::ScreenToImage(int32_t screenX, int32_t screenY,
-	float& outImageX, float& outImageY) const
+bool D3D11ImageView_Impl::ScreenToImage(int32_t screenX, int32_t screenY, float& outImageX, float& outImageY) const
 {
 	if (!m_camera)
 		return false;
 
-	return m_camera->ScreenToImage(static_cast<float>(screenX),
-		static_cast<float>(screenY), outImageX, outImageY);
+	return m_camera->ScreenToImage(static_cast<float>(screenX), static_cast<float>(screenY), outImageX, outImageY);
 }
 
-bool D3D11ImageView_Impl::ImageToScreen(float imageX, float imageY,
-	int32_t& outScreenX, int32_t& outScreenY) const
+bool D3D11ImageView_Impl::ImageToScreen(float imageX, float imageY, int32_t& outScreenX, int32_t& outScreenY) const
 {
 	if (!m_camera)
 		return false;

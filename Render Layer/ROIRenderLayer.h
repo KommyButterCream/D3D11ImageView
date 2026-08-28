@@ -45,10 +45,10 @@ public:
 public:
 	void SetCamera2D(const Camera2D* camera);
 
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	void ROIClear();
 	bool ROIRemove(const wchar_t* key);
 

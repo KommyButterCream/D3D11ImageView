@@ -487,7 +487,7 @@ void D3D11ImageView::WindowOverlayAdd(const Polygon2f* polygons, size_t count, c
 	}
 }
 
-bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (m_impl)
 	{
@@ -497,7 +497,7 @@ bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Rect2
 	return false;
 }
 
-bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (m_impl)
 	{
@@ -507,7 +507,7 @@ bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Ellip
 	return false;
 }
 
-bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (m_impl)
 	{
@@ -517,7 +517,7 @@ bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Circl
 	return false;
 }
 
-bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (m_impl)
 	{
@@ -593,12 +593,6 @@ bool D3D11ImageView::SimulateDeviceLost()
 	return false;
 }
 
-/*=====================================================
-	ROI 조회
-
-	전부 Impl 로 위임한다. 여기에 로직을 두면 C ABI 경로와
-	동작이 갈라진다.
-=====================================================*/
 uint32_t D3D11ImageView::ROIGetCount() const
 {
 	return m_impl ? m_impl->ROIGetCount() : 0u;
@@ -825,8 +819,7 @@ bool D3D11ImageView::GetVisibleImageRect(Rect2f& outRect) const
 /*=====================================================
 	좌표 변환
 =====================================================*/
-bool D3D11ImageView::ScreenToImage(int32_t screenX, int32_t screenY,
-	float& outImageX, float& outImageY) const
+bool D3D11ImageView::ScreenToImage(int32_t screenX, int32_t screenY, float& outImageX, float& outImageY) const
 {
 	outImageX = 0.0f;
 	outImageY = 0.0f;
@@ -834,8 +827,7 @@ bool D3D11ImageView::ScreenToImage(int32_t screenX, int32_t screenY,
 	return m_impl ? m_impl->ScreenToImage(screenX, screenY, outImageX, outImageY) : false;
 }
 
-bool D3D11ImageView::ImageToScreen(float imageX, float imageY,
-	int32_t& outScreenX, int32_t& outScreenY) const
+bool D3D11ImageView::ImageToScreen(float imageX, float imageY, int32_t& outScreenX, int32_t& outScreenY) const
 {
 	outScreenX = 0;
 	outScreenY = 0;

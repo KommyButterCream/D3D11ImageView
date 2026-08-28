@@ -90,9 +90,6 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 			return false;
 		};
 
-	timeBeginPeriod(1);
-	m_timePeriodSet = true;
-
 	RECT clientRect = {};
 	uint32_t clientWidth = 0;
 	uint32_t clientHeight = 0;
@@ -242,7 +239,7 @@ void D3D11ImageView_Impl::Finalize()
 		m_pendingImageUpdate.texture->Release();
 	}
 	m_pendingImageUpdate.Reset();
-	m_hasPendingImageUpdate = false;
+	::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
 	// 1. Detach device/resize listeners from RenderContext.
@@ -297,11 +294,6 @@ void D3D11ImageView_Impl::Finalize()
 	m_renderThread.reset();
 	m_uiEventDispatcher.reset();
 
-	if (m_timePeriodSet)
-	{
-		timeEndPeriod(1);
-		m_timePeriodSet = false;
-	}
 }
 
 HWND D3D11ImageView_Impl::GetHWND() const
@@ -363,9 +355,9 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 
 	m_uiLayer->Prepare();
 
-	if (isCameraAnimating || isUiAnimating || m_isDirty)
+	if (isCameraAnimating || isUiAnimating || m_isDirty != FALSE)
 	{
-		m_isDirty = false;
+		::InterlockedExchange(&m_isDirty, FALSE);
 
 		if (!m_renderContext->BeginFrame())
 		{
@@ -377,7 +369,7 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 		m_imageLayer->Render();
 		if (m_imageLayer->IsImageRenderDirty())
 		{
-			m_isDirty = true;
+			::InterlockedExchange(&m_isDirty, TRUE);
 			InvalidateFrame();
 		}
 
@@ -403,7 +395,7 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 
 	::ReleaseSRWLockExclusive(&m_renderLock);
 
-	return isCameraAnimating || isUiAnimating || m_isDirty;
+	return isCameraAnimating || isUiAnimating || m_isDirty != FALSE;
 }
 
 UIEventResult D3D11ImageView_Impl::HandleMouseEventUI(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY)
@@ -672,8 +664,10 @@ void D3D11ImageView_Impl::UpdateStatusbar(int32_t mouseX, int32_t mouseY)
 		(static_cast<uint64_t>(static_cast<uint32_t>(mouseY)) << 32) |
 		static_cast<uint64_t>(static_cast<uint32_t>(mouseX));
 
-	m_pendingStatusbarPos.store(packed, std::memory_order_relaxed);
-	m_hasPendingStatusbarUpdate.store(true, std::memory_order_release);
+	// 좌표를 먼저 쓰고 플래그를 나중에 세운다. Interlocked* 는 전체 배리어라
+	// 렌더 스레드가 플래그만 보고 옛 좌표를 읽는 재배치가 생기지 않는다.
+	::InterlockedExchange64(&m_pendingStatusbarPos, static_cast<LONG64>(packed));
+	::InterlockedExchange(&m_hasPendingStatusbarUpdate, TRUE);
 
 	InvalidateFrame();
 }
@@ -700,13 +694,13 @@ void D3D11ImageView_Impl::UpdateStatusbarZoomIfChanged()
 
 void D3D11ImageView_Impl::ApplyPendingStatusbarUpdate()
 {
-	if (!m_hasPendingStatusbarUpdate.exchange(false, std::memory_order_acquire))
+	if (::InterlockedExchange(&m_hasPendingStatusbarUpdate, FALSE) == FALSE)
 		return;
 
 	if (!m_camera || !m_uiLayer || !m_imageLayer)
 		return;
 
-	const uint64_t packed = m_pendingStatusbarPos.load(std::memory_order_relaxed);
+	const uint64_t packed = static_cast<uint64_t>(m_pendingStatusbarPos);
 	const int32_t mouseX = static_cast<int32_t>(static_cast<uint32_t>(packed & 0xFFFFFFFFull));
 	const int32_t mouseY = static_cast<int32_t>(static_cast<uint32_t>(packed >> 32));
 
@@ -763,7 +757,7 @@ bool D3D11ImageView_Impl::RenderCallback(void* param)
 
 void D3D11ImageView_Impl::InvalidateFrame()
 {
-	m_isDirty = true;
+	::InterlockedExchange(&m_isDirty, TRUE);
 
 	if (m_renderThread)
 	{

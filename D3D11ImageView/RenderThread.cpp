@@ -1,6 +1,10 @@
 #include "pch.h"
 #include "RenderThread.h"
 
+// timeBeginPeriod / timeEndPeriod. 폴백 경로에서만 쓴다.
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
+
 // Win10 1803 이전 SDK 헤더에는 없다. 값은 winbase.h 정의와 동일.
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
 #define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
@@ -40,8 +44,8 @@ bool RenderThread::CreateFrameTimer()
 	if (m_frameTimer)
 		return true;
 
-	// 고해상도 대기 타이머(Win10 1803+). timeBeginPeriod 에 의존하지 않고
-	// 0.5ms 수준 정밀도가 나오며, 스핀과 달리 CPU 를 쓰지 않는다.
+	// 고해상도 대기 타이머 시스템 타이머 틱과 무관하게 0.5ms
+	// 수준 정밀도가 나오며, 스핀과 달리 CPU 를 쓰지 않는다.
 	// 자동 리셋(동기화 타이머)이라 대기가 신호를 소비한다.
 	m_frameTimer = ::CreateWaitableTimerExW(
 		nullptr,
@@ -49,11 +53,25 @@ bool RenderThread::CreateFrameTimer()
 		CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
 		TIMER_ALL_ACCESS);
 
-	if (!m_frameTimer)
+	if (m_frameTimer)
 	{
-		// 고해상도 플래그를 모르는 환경이면 일반 대기 타이머로 후퇴한다.
-		m_frameTimer = ::CreateWaitableTimerExW(
-			nullptr, nullptr, 0, TIMER_ALL_ACCESS);
+		// 정상 경로. 이 타이머는 프로세스 타이머 해상도에 의존하지 않으므로
+		// timeBeginPeriod 를 걸 이유가 없다. 걸면 전력만 더 쓴다.
+		return true;
+	}
+
+	// CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 모드로 생성 실패한 경우에 대한 Fallback
+	// 일반 대기 타이머도, WaitFrameInterval 의 Sleep 경로도 시스템 타이머 틱에
+	// 묶인다(기본 15.6ms). 이때만 프로세스 타이머 해상도를 1ms 로 올린다.
+	// Win10 2004 부터 이 설정은 호출한 프로세스에만 적용된다.
+	m_frameTimer = ::CreateWaitableTimerExW(
+		nullptr, nullptr, 0, TIMER_ALL_ACCESS);
+
+	// timeBeginPeriod 는 참조 카운트 방식이라 중복 호출하면 그만큼 풀어야 한다.
+	// StartThread 가 여러 번 불려도 한 번만 걸리게 막는다.
+	if (!m_timePeriodSet && ::timeBeginPeriod(1) == TIMERR_NOERROR)
+	{
+		m_timePeriodSet = true;
 	}
 
 	return m_frameTimer != nullptr;
@@ -67,6 +85,13 @@ void RenderThread::DestroyFrameTimer()
 		::CloseHandle(m_frameTimer);
 		m_frameTimer = nullptr;
 	}
+
+	// 폴백 경로에서만 걸었다. 건 만큼만 푼다.
+	if (m_timePeriodSet)
+	{
+		::timeEndPeriod(1);
+		m_timePeriodSet = false;
+	}
 }
 
 void RenderThread::StopThread()
@@ -74,7 +99,7 @@ void RenderThread::StopThread()
 	RequestStop();
 
 	// 정지 플래그를 세운 직후 바로 깨우면 놓칠 수 있다.
-	// 렌더 스레드는 m_srwLock 을 쥔 채 술어를 평가한 뒤
+	// 렌더 스레드는 m_renderLock 을 쥔 채 술어를 평가한 뒤
 	// SleepConditionVariableSRW 로 진입하는데, 그 사이 구간에
 	// WakeConditionVariable 이 끼면 대기자가 아직 없어 무효화되고
 	// 스레드는 INFINITE 로 잠들어 Join 이 영구 대기한다.
@@ -85,8 +110,8 @@ void RenderThread::StopThread()
 	//   - 렌더 스레드가 놓은 뒤에 잡는 경우: 대기 등록이 이미 끝났으므로
 	//     Wake 가 전달된다.
 	// RequestFrame 이 쓰는 것과 같은 처리다.
-	::AcquireSRWLockExclusive(&m_srwLock);
-	::ReleaseSRWLockExclusive(&m_srwLock);
+	::AcquireSRWLockExclusive(&m_renderLock);
+	::ReleaseSRWLockExclusive(&m_renderLock);
 
 	::WakeAllConditionVariable(&m_cv);
 
@@ -101,7 +126,11 @@ void RenderThread::SetRenderFPS(double fps)
 		return;
 
 	// 실행 중에 바꿔도 다음 프레임부터 반영된다.
-	m_renderFps.store(fps, std::memory_order_relaxed);
+	// 100ns 단위 간격으로 바꿔서 넣는다. 렌더 루프는 이 값을 그대로 읽기만 한다.
+	const double interval100ns = 10000000.0 / fps;
+
+	::InterlockedExchange64(&m_frameInterval100ns,
+		static_cast<LONG64>(interval100ns + 0.5));
 }
 
 void RenderThread::RequestFrame()
@@ -111,8 +140,8 @@ void RenderThread::RequestFrame()
 		return;
 	}
 
-	::AcquireSRWLockExclusive(&m_srwLock);
-	::ReleaseSRWLockExclusive(&m_srwLock);
+	::AcquireSRWLockExclusive(&m_renderLock);
+	::ReleaseSRWLockExclusive(&m_renderLock);
 
 	::WakeConditionVariable(&m_cv);
 }
@@ -126,25 +155,20 @@ void RenderThread::ThreadRenderLoop()
 {
 	while (!IsStopRequested())
 	{
-		// 이번 루프에서 실제로 잠들었는지 기록한다.
-		//
-		// 잠들었다 = 애니메이션이 돌고 있지 않았다(술어가 !m_isAnimating 이므로).
-		// 그 다음 프레임은 새 애니메이션의 첫 프레임이고, 유휴 시간은 애니메이션
-		// 시간에 포함되면 안 된다. 이걸 알려주지 않으면 콜백이 유휴 시간 전체를
-		// dt 로 받아서(엔진 타이머가 0.1초로 클램프) 보간이 한 번에 튄다.
+		// 잠들었다가 깨어난 경우 애니메이션을 위한 dt 를 0 으로 설정하기 위해 잠들었다가 깨어났는지 확인
 		bool sleptThisLoop = false;
 
-		::AcquireSRWLockExclusive(&m_srwLock);
+		::AcquireSRWLockExclusive(&m_renderLock);
 
 		while (!IsStopRequested() &&
 			::InterlockedCompareExchange(&m_renderRequested, 0, 1) == 0 &&
 			!m_isAnimating)
 		{
 			sleptThisLoop = true;
-			::SleepConditionVariableSRW(&m_cv, &m_srwLock, INFINITE, 0);
+			::SleepConditionVariableSRW(&m_cv, &m_renderLock, INFINITE, 0);
 		}
 
-		::ReleaseSRWLockExclusive(&m_srwLock);
+		::ReleaseSRWLockExclusive(&m_renderLock);
 
 		if (IsStopRequested())
 		{
@@ -171,8 +195,10 @@ void RenderThread::ThreadRenderLoop()
 		if (m_isAnimating)
 		{
 			// 매 프레임 다시 읽는다. 실행 중 SetRenderFPS 변경이 반영된다.
-			const double fps = m_renderFps.load(std::memory_order_relaxed);
-			const double frameTime_ms = (fps > 0.0) ? (1000.0 / fps) : 0.0;
+			const LONG64 interval100ns = m_frameInterval100ns;
+			const double frameTime_ms = (interval100ns > 0)
+				? (static_cast<double>(interval100ns) / 10000.0)
+				: 0.0;
 
 			WaitFrameInterval(frameTime_ms - elapsed_ms);
 		}
@@ -207,8 +233,8 @@ void RenderThread::WaitFrameInterval(double waitTime_ms)
 		}
 	}
 
-	// 타이머를 못 만든 환경 폴백. timeBeginPeriod(1) 이 걸려 있으므로
-	// 1ms 해상도는 확보된다.
+	// 타이머를 못 만든 환경 폴백. 이 경로가 살아 있다는 것은 CreateFrameTimer 가
+	// 고해상도 타이머를 못 얻었다는 뜻이고, 그때 timeBeginPeriod(1) 을 걸어뒀다.
 	const DWORD fallbackWait_ms = static_cast<DWORD>(waitTime_ms + 0.5);
 
 	if (stopEvent)

@@ -156,7 +156,7 @@ void ROIRenderLayer::SetCamera2D(const Camera2D* camera)
 	m_camera = camera;
 }
 
-bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!key || key[0] == L'\0')
 	{
@@ -181,7 +181,7 @@ bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Rect2
 	return result;
 }
 
-bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!key || key[0] == L'\0')
 	{
@@ -206,7 +206,7 @@ bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Ellip
 	return result;
 }
 
-bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!key || key[0] == L'\0')
 	{
@@ -231,7 +231,7 @@ bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Circl
 	return result;
 }
 
-bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!key || key[0] == L'\0' || !polygon.IsValid())
 	{
@@ -619,8 +619,7 @@ bool ROIRenderLayer::UpdateHoverObject(IROIObject* hoveredObject)
 /*---------------------------------------------------------
 	조회
 ---------------------------------------------------------*/
-uint32_t ROIRenderLayer::CopyString(const std::wstring& source,
-	wchar_t* buffer, uint32_t bufferChars)
+uint32_t ROIRenderLayer::CopyString(const std::wstring& source, wchar_t* buffer, uint32_t bufferChars)
 {
 	// 반환값은 종료 널을 포함한 필요 문자 수. 2회 호출 패턴용.
 	const uint32_t needed = static_cast<uint32_t>(source.size()) + 1;
@@ -661,8 +660,7 @@ bool ROIRenderLayer::ROIGetShape(const wchar_t* key, ROIShapeData& outShape) con
 	return found;
 }
 
-uint32_t ROIRenderLayer::ROIGetVertices(const wchar_t* key,
-	Core::ShapeType::Point2f* buffer, uint32_t capacity,
+uint32_t ROIRenderLayer::ROIGetVertices(const wchar_t* key,	Core::ShapeType::Point2f* buffer, uint32_t capacity,
 	uint32_t segmentsPerCurve) const
 {
 	if (!key)
@@ -680,8 +678,7 @@ uint32_t ROIRenderLayer::ROIGetVertices(const wchar_t* key,
 	return needed;
 }
 
-bool ROIRenderLayer::ROIGetBounds(const wchar_t* key,
-	Core::ShapeType::Rect2f& outBounds) const
+bool ROIRenderLayer::ROIGetBounds(const wchar_t* key, Core::ShapeType::Rect2f& outBounds) const
 {
 	if (!key)
 		return false;
@@ -725,8 +722,7 @@ bool ROIRenderLayer::ROIGetInfo(const wchar_t* key, ROIInfoData& outInfo) const
 	return found;
 }
 
-uint32_t ROIRenderLayer::ROIGetName(const wchar_t* key,
-	wchar_t* buffer, uint32_t bufferChars) const
+uint32_t ROIRenderLayer::ROIGetName(const wchar_t* key,	wchar_t* buffer, uint32_t bufferChars) const
 {
 	if (!key)
 		return 0;
@@ -743,8 +739,7 @@ uint32_t ROIRenderLayer::ROIGetName(const wchar_t* key,
 	return needed;
 }
 
-uint32_t ROIRenderLayer::ROIGetKeyAt(uint32_t index,
-	wchar_t* buffer, uint32_t bufferChars) const
+uint32_t ROIRenderLayer::ROIGetKeyAt(uint32_t index, wchar_t* buffer, uint32_t bufferChars) const
 {
 	::AcquireSRWLockShared(&m_roiLock);
 
@@ -772,8 +767,7 @@ uint32_t ROIRenderLayer::ROIGetSelectedKey(wchar_t* buffer, uint32_t bufferChars
 	return needed;
 }
 
-uint32_t ROIRenderLayer::ROIHitTestKey(float imageX, float imageY, float tolerance,
-	wchar_t* buffer, uint32_t bufferChars) const
+uint32_t ROIRenderLayer::ROIHitTestKey(float imageX, float imageY, float tolerance,	wchar_t* buffer, uint32_t bufferChars) const
 {
 	const Core::ShapeType::Point2f imagePoint{ imageX, imageY };
 

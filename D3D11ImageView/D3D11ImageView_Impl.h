@@ -4,10 +4,6 @@
 
 #include <vector>
 #include <memory>
-#include <atomic>
-
-#include <mmsystem.h>
-#pragma comment(lib, "winmm.lib")
 
 #include "../../../Module/Core/ShapeType/Point2i.h"
 #include "../../../Module/Core/ShapeType/Point2f.h"
@@ -189,10 +185,10 @@ public:
 	void WindowOverlayAdd(const Polyline2f* polylines, size_t count, const OverlayStyle& style);
 	void WindowOverlayAdd(const Polygon2f* polygons, size_t count, const OverlayStyle& style);
 
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
-	bool ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	void ROIClear();
 
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth = 8);
@@ -418,13 +414,23 @@ private:
 	mutable SRWLOCK m_renderLock = SRWLOCK_INIT;
 	SRWLOCK m_pendingImageLock = SRWLOCK_INIT;
 
-	std::atomic<bool> m_isDirty = { true };
-	std::atomic<bool> m_hasPendingImageUpdate = { false };
+	// 스레드 간 공유 플래그. 쓰기는 Interlocked*, 읽기는 volatile 로 한다.
+	//
+	// MSVC 는 x86/x64 에서 /volatile:ms 가 기본이라 volatile 읽기가 acquire,
+	// 쓰기가 release 의미를 갖는다. 또한 정렬된 LONG 읽기는 원자적이다.
+	// 따라서 읽기에 InterlockedCompareExchange(&v, 0, 0) 같은 잠금 RMW 를
+	// 쓸 이유가 없다(그건 읽기인데도 캐시 라인을 더럽힌다).
+	// ARM 으로 이식한다면 /volatile:iso 가 기본이므로 읽기 쪽을 다시 봐야 한다.
+	volatile LONG m_isDirty = TRUE;
+	volatile LONG m_hasPendingImageUpdate = FALSE;
 
 	// 상태바 갱신 예약. UI 스레드가 쓰고 렌더 스레드가 읽는다.
 	// 좌표는 x(하위 32bit) | y(상위 32bit) 로 묶어 한 번에 쓴다.
-	std::atomic<uint64_t> m_pendingStatusbarPos = { 0 };
-	std::atomic<bool> m_hasPendingStatusbarUpdate = { false };
+	//
+	// 이 64bit 읽기가 원자적인 것은 x64 라서다. x86 이면 32bit 두 번으로 쪼개져
+	// 찢어진 좌표가 보일 수 있으니 InterlockedCompareExchange64 로 읽어야 한다.
+	volatile LONG64 m_pendingStatusbarPos = 0;
+	volatile LONG m_hasPendingStatusbarUpdate = FALSE;
 
 	// 렌더 스레드 전용. 마지막으로 라벨에 넣은 배율(%)을 0.01 단위 정수로 보관한다.
 	// 라벨이 "%.2f %%" 로 찍으므로 그보다 작은 변화는 다시 쓸 이유가 없다.
@@ -451,7 +457,6 @@ private:
 	std::unique_ptr<UIRenderLayer> m_uiLayer = nullptr;
 
 	PendingImageUpdate m_pendingImageUpdate = {};
-	bool m_timePeriodSet = false;
 	bool m_isFinalized = false;
 };
 

@@ -4,7 +4,6 @@
 
 #include "HighResolutionTimer.h"
 
-#include <atomic>
 
 using RenderFunc = bool(*)(void* userData);
 
@@ -53,7 +52,7 @@ private:
 	RenderFunc m_renderFunc = nullptr;
 	void* m_userData = nullptr;
 
-	SRWLOCK m_srwLock = SRWLOCK_INIT;
+	SRWLOCK m_renderLock = SRWLOCK_INIT;
 	CONDITION_VARIABLE m_cv = CONDITION_VARIABLE_INIT;
 	alignas(4) long m_renderRequested = 0;
 
@@ -62,10 +61,20 @@ private:
 
 	// 애니메이션 중 매 프레임 읽는다. 실행 중에도 SetRenderFPS 가 먹도록
 	// 루프 밖에서 한 번 계산하지 않는다.
-	std::atomic<double> m_renderFps = { 120.0 };
+	//
+	// FPS 가 아니라 프레임 간격을 100ns 단위 정수로 들고 있다. Interlocked 계열에
+	// double 오버로드가 없어서 비트 패턴을 LONG64 로 갈아끼우는 수밖에 없는데,
+	// 어차피 SetWaitableTimer 가 원하는 단위가 100ns 라 정수로 두는 편이 자연스럽다.
+	// 나눗셈도 SetRenderFPS 한 번으로 옮겨간다.
+	//   120fps -> 1000/120 ms -> 83,333 (100ns)
+	volatile LONG64 m_frameInterval100ns = 83333;
 
 	// 프레임 페이싱용 대기 타이머. 스핀 없이 1ms 이하 정밀도를 얻는다.
 	HANDLE m_frameTimer = nullptr;
+
+	// 고해상도 대기 타이머를 못 얻어 폴백으로 내려갔을 때만 true.
+	// timeBeginPeriod 를 건 상태인지 나타낸다.
+	bool m_timePeriodSet = false;
 
 	HighResolutionTimer m_timer;
 };

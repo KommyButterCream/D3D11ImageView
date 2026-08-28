@@ -12,7 +12,7 @@ public:
 	explicit ROIPolygonRenderer(const wchar_t* key);
 	~ROIPolygonRenderer() override;
 
-	bool UpdateDefinition(const wchar_t* name, const Core::ShapeType::Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize);
+	bool UpdateDefinition(const wchar_t* name, const Core::ShapeType::Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 
 	ROIObjectType GetObjectType() const override;
 	const std::wstring& GetKey() const override;
@@ -21,13 +21,11 @@ public:
 	bool IsMovable() const override;
 	bool IsResizable() const override;
 
-	// ── 조회 (IROIObject)
 	const std::wstring& GetName() const override;
 	uint32_t GetColorRGB() const override;
 	int32_t GetFontSize() const override;
 	void GetShape(ROIShapeData& outShape) const override;
-	uint32_t GetVertices(Core::ShapeType::Point2f* buffer, uint32_t capacity,
-		uint32_t segmentsPerCurve) const override;
+	uint32_t GetVertices(Core::ShapeType::Point2f* buffer, uint32_t capacity, uint32_t segmentsPerCurve) const override;
 
 	void Render(const ROIRenderContext& context, bool isSelected, bool isHovered) const override;
 	void OnDeviceLost() override;
@@ -63,7 +61,7 @@ private:
 	D2D1_COLOR_F m_strokeColor = { 0.0f, 1.0f, 0.0f, 1.0f };
 	bool m_isMovable = true;
 	bool m_isResizable = true;
-	long m_fontSize = 14;
+	int32_t m_fontSize = 14;
 
 	ROIHitResult m_activeHit = {};
 	Core::ShapeType::Point2f m_dragStartImagePoint = {};

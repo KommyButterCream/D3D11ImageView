@@ -120,9 +120,7 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
-	UIEventResult uiEventResult = HandleMouseEventUI(
-		UIMouseEventType::LButtonDown,
-		mousePosition.x, mousePosition.y);
+	UIEventResult uiEventResult = HandleMouseEventUI(UIMouseEventType::LButtonDown,	mousePosition.x, mousePosition.y);
 
 	if (uiEventResult == UIEventResult::Toolbar ||
 		uiEventResult == UIEventResult::ContextMenu)
@@ -130,9 +128,6 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 		return 0L;
 	}
 
-	// 호스트 콜백. UI 처리 뒤, ROI 처리 앞이라 m_roiLock 밖이므로
-	// 콜백에서 ROI API 를 불러도 데드락이 없다.
-	// true 를 반환하면 호스트가 처리했으므로 뷰어는 더 진행하지 않는다.
 	if (DispatchMouseEvent(MouseEventType::LButtonDown, mousePosition.x, mousePosition.y))
 	{
 		return 0L;
@@ -159,7 +154,6 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 	}
 
 	::SetCapture(m_hWnd);
-	//::SetCursor(::LoadCursor(nullptr, IDC_HAND));
 
 	return 0L;
 }
@@ -170,8 +164,7 @@ LRESULT D3D11ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
-	if (HandleMouseEventUI(UIMouseEventType::LButtonUp, mousePosition.x, mousePosition.y)
-		!= UIEventResult::None)
+	if (HandleMouseEventUI(UIMouseEventType::LButtonUp, mousePosition.x, mousePosition.y) != UIEventResult::None)
 	{
 		return 0L;
 	}
@@ -205,7 +198,6 @@ LRESULT D3D11ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
 	m_mouseButtonMode = MouseButtonMode::NOTHING;
 
 	::ReleaseCapture();
-	//::SetCursor(::LoadCursor(nullptr, IDC_ARROW));
 
 	return 0L;
 }
@@ -216,8 +208,9 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
-	// WM_MOUSELEAVE 를 한 번 받으려면 매번 다시 무장해야 한다.
-	// (TME_LEAVE 는 한 번 발생하면 자동으로 해제된다)
+	// 마우스가 창을 벗어나는 경우에 Leave 이벤트를 받을 수 있도록 한다.
+	// WM_MOUSELEAVE 를 한 번 받으려면 매번 등록 해주어야 한다.
+	// TME_LEAVE 는 한 번 발생하면 자동으로 해제된다.
 	if (!m_isMouseTracking)
 	{
 		TRACKMOUSEEVENT trackMouseEvent = {};
@@ -257,9 +250,6 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 		}
 	}
 
-	//const int32_t differenceRButtonX = mousePosition.x - m_RButtonDown.x;
-	//const int32_t differenceRButtonY = mousePosition.y - m_RButtonDown.y;
-
 	m_lButtonDragPoint = mousePosition;
 
 	switch (m_mouseButtonMode)
@@ -283,11 +273,6 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 	return 0L;
 }
 
-// 마우스가 창을 벗어났다.
-//
-// TrackMouseEvent 를 걸어두지 않으면 이 메시지가 오지 않아서, hover 하이라이트와
-// 상태바 픽셀값이 마지막 값에 그대로 멈춘다. OnMouseMove 에서 매번 추적을
-// 재무장하고 여기서 정리한다.
 LRESULT D3D11ImageView_Impl::OnMouseLeave(WPARAM wParam, LPARAM lParam)
 {
 	m_isMouseTracking = false;
@@ -313,7 +298,6 @@ LRESULT D3D11ImageView_Impl::OnMouseLeave(WPARAM wParam, LPARAM lParam)
 }
 
 // 캡처를 잃었다.
-//
 // 팬/선택/ROI 편집은 모두 SetCapture 를 잡고 시작하는데, Alt+Tab 이나 다른
 // 창이 캡처를 가져가면 WM_LBUTTONUP / WM_RBUTTONUP 이 오지 않는다. 그러면
 // m_mouseButtonMode 가 그대로 남아 버튼을 뗀 뒤에도 팬이 계속되는 것처럼
@@ -426,8 +410,6 @@ LRESULT D3D11ImageView_Impl::OnRButtonDown(WPARAM wParam, LPARAM lParam)
 		//return 0L;
 	}
 
-	// 호스트가 우클릭을 선점하면 팬을 시작하지 않는다.
-	// (자체 컨텍스트 메뉴를 띄우는 경우)
 	if (DispatchMouseEvent(MouseEventType::RButtonDown, mousePosition.x, mousePosition.y))
 	{
 		return 0L;

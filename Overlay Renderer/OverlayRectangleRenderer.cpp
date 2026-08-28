@@ -56,8 +56,6 @@ void OverlayRectangleRenderer::Render(const OverlayRenderContext& context) const
 
 	if (!style.transparentFill)
 	{
-		// 도형이 불변이므로 한 번만 만들고 계속 재사용한다.
-		// 실패했으면 매 프레임 다시 시도하지 않는다.
 		if (!m_geometry && !m_geometryBuildFailed)
 		{
 			const D2D1_POINT_2F points[4] = { point1, point2, point3, point4 };
@@ -86,7 +84,6 @@ void OverlayRectangleRenderer::Render(const OverlayRenderContext& context) const
 	}
 }
 
-
 OverlayRectangleRenderer::~OverlayRectangleRenderer()
 {
 	SafeRelease(m_geometry);
@@ -94,9 +91,6 @@ OverlayRectangleRenderer::~OverlayRectangleRenderer()
 
 void OverlayRectangleRenderer::OnDeviceLost()
 {
-	// 지오메트리는 ID2D1Factory 소속인데, 이 엔진은 디바이스 재생성 시
-	// D2D 팩토리까지 다시 만든다. 옛 팩토리의 지오메트리를 새 컨텍스트로
-	// 그리면 D2DERR_WRONG_FACTORY 가 나므로 버리고 다시 만들게 한다.
 	SafeRelease(m_geometry);
 	m_geometryBuildFailed = false;
 }

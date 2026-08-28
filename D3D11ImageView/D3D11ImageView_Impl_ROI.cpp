@@ -5,7 +5,7 @@
 
 using namespace Core::ShapeType;
 
-bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -21,7 +21,7 @@ bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const 
 	return result;
 }
 
-bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -37,7 +37,7 @@ bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const 
 	return result;
 }
 
-bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!m_roiLayer)
 	{
@@ -53,7 +53,7 @@ bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const 
 	return result;
 }
 
-bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (!m_roiLayer)
 	{

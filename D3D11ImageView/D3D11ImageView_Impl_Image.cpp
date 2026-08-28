@@ -37,10 +37,8 @@ bool D3D11ImageView_Impl::UpdateTexture(ID3D11Texture2D* texture)
 bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth)
 {
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
-	if (m_pendingImageUpdate.texture)
-	{
-		m_pendingImageUpdate.texture->Release();
-	}
+
+	SafeRelease(m_pendingImageUpdate.texture);
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::RawImage;
 	m_pendingImageUpdate.rawData = data;
@@ -51,7 +49,7 @@ bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, 
 	m_pendingImageUpdate.bitDepth = bitDepth;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
-	m_hasPendingImageUpdate = true;
+	::InterlockedExchange(&m_hasPendingImageUpdate, TRUE);
 	InvalidateFrame();
 
 	return true;
@@ -65,16 +63,13 @@ bool D3D11ImageView_Impl::QueueTextureUpdate(ID3D11Texture2D* texture)
 	texture->AddRef();
 
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
-	if (m_pendingImageUpdate.texture)
-	{
-		m_pendingImageUpdate.texture->Release();
-	}
+	SafeRelease(m_pendingImageUpdate.texture);
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::Texture;
 	m_pendingImageUpdate.texture = texture;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
-	m_hasPendingImageUpdate = true;
+	::InterlockedExchange(&m_hasPendingImageUpdate, TRUE);
 	InvalidateFrame();
 
 	return true;
@@ -86,16 +81,13 @@ bool D3D11ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 		return false;
 
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
-	if (m_pendingImageUpdate.texture)
-	{
-		m_pendingImageUpdate.texture->Release();
-	}
+	SafeRelease(m_pendingImageUpdate.texture);
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::SharedTexture;
 	m_pendingImageUpdate.sharedHandle = sharedHandle;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
-	m_hasPendingImageUpdate = true;
+	::InterlockedExchange(&m_hasPendingImageUpdate, TRUE);
 	InvalidateFrame();
 
 	return true;
@@ -113,13 +105,9 @@ void D3D11ImageView_Impl::DetachImage()
 	// 아직 적용되지 않은 대기 업데이트도 버린다. 그 안의 rawData 도
 	// 호출자 버퍼를 가리키고 있을 수 있다.
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
-	if (m_pendingImageUpdate.texture)
-	{
-		m_pendingImageUpdate.texture->Release();
-	}
-	m_pendingImageUpdate.texture = nullptr;
+	SafeRelease(m_pendingImageUpdate.texture);
 	m_pendingImageUpdate.Reset();
-	m_hasPendingImageUpdate = false;
+	::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
 	// 풀 해제 + ImageBase 참조 해제
@@ -132,7 +120,8 @@ void D3D11ImageView_Impl::DetachImage()
 
 bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 {
-	if (!m_imageLayer || !m_hasPendingImageUpdate.exchange(false))
+	// 단축 평가 순서를 유지한다. m_imageLayer 가 없으면 플래그를 건드리지 않는다.
+	if (!m_imageLayer || ::InterlockedExchange(&m_hasPendingImageUpdate, FALSE) == FALSE)
 		return true;
 
 	PendingImageUpdate pendingUpdate = {};
@@ -194,16 +183,10 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 		break;
 	}
 
-	if (pendingUpdate.texture)
-	{
-		pendingUpdate.texture->Release();
-		pendingUpdate.texture = nullptr;
-	}
+	SafeRelease(pendingUpdate.texture);
 
 	return result;
 }
-
-
 
 bool D3D11ImageView_Impl::SimulateDeviceLost()
 {

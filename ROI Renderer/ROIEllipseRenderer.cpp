@@ -15,7 +15,7 @@ ROIEllipseRenderer::ROIEllipseRenderer(const wchar_t* key)
 	}
 }
 
-bool ROIEllipseRenderer::UpdateDefinition(const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIEllipseRenderer::UpdateDefinition(const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	m_name = name ? name : L"";
 	m_ellipse = ellipse;
@@ -223,7 +223,7 @@ uint32_t ROIEllipseRenderer::GetColorRGB() const
 
 int32_t ROIEllipseRenderer::GetFontSize() const
 {
-	return static_cast<int32_t>(m_fontSize);
+	return m_fontSize;
 }
 
 void ROIEllipseRenderer::GetShape(ROIShapeData& outShape) const

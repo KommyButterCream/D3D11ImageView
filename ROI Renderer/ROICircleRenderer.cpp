@@ -15,7 +15,7 @@ ROICircleRenderer::ROICircleRenderer(const wchar_t* key)
 	}
 }
 
-bool ROICircleRenderer::UpdateDefinition(const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROICircleRenderer::UpdateDefinition(const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	m_name = name ? name : L"";
 	m_circle = circle;
@@ -179,10 +179,6 @@ void ROICircleRenderer::UpdateBounds()
 	m_bounds = m_circle.BoundingBoxF();
 }
 
-
-/*---------------------------------------------------------
-	조회 (IROIObject)
----------------------------------------------------------*/
 const std::wstring& ROICircleRenderer::GetName() const
 {
 	return m_name;
@@ -195,22 +191,21 @@ uint32_t ROICircleRenderer::GetColorRGB() const
 
 int32_t ROICircleRenderer::GetFontSize() const
 {
-	return static_cast<int32_t>(m_fontSize);
+	return m_fontSize;
 }
 
 void ROICircleRenderer::GetShape(ROIShapeData& outShape) const
 {
 	outShape = {};
 	outShape.type = ROIObjectType::Circle;
-	outShape.vertexCount = 0;   // 해석적 형상이므로 정점 개수는 의미 없음
+	outShape.vertexCount = 0;
 
 	outShape.u.circle.cx = m_circle.x;
 	outShape.u.circle.cy = m_circle.y;
 	outShape.u.circle.radius = m_circle.radius;
 }
 
-uint32_t ROICircleRenderer::GetVertices(Core::ShapeType::Point2f* buffer,
-	uint32_t capacity, uint32_t segmentsPerCurve) const
+uint32_t ROICircleRenderer::GetVertices(Core::ShapeType::Point2f* buffer, uint32_t capacity, uint32_t segmentsPerCurve) const
 {
 	const uint32_t segments = (segmentsPerCurve == 0) ? 64u : segmentsPerCurve;
 

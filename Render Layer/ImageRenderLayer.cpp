@@ -205,7 +205,7 @@ void ImageRenderLayer::OnDeviceLost()
 {
 	ReleaseDeviceResources();
 
-	// 타일 풀의 ID3D11Texture2D 도 죽은 디바이스 소속이다.
+	// 타일 풀의 ID3D11Texture2D 도 Lost된 디바이스 소속이다.
 	// TileManager 는 리스너로 등록되어 있지 않으므로 여기서 위임한다.
 	if (m_tileManager)
 	{
@@ -532,7 +532,6 @@ bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width,
 
 	m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
 	GenerateSingleMips();
-
 
 	// Shared texture updates do not own CPU image memory.
 	if (m_image)
@@ -946,7 +945,7 @@ bool ImageRenderLayer::CreateTileVertexBuffer(uint32_t vertexCount)
 	if (!m_device || vertexCount == 0)
 		return false;
 
-	D3D11_BUFFER_DESC bd{};
+	D3D11_BUFFER_DESC bd = {};
 	bd.Usage = D3D11_USAGE_DYNAMIC;
 	bd.ByteWidth = static_cast<UINT>(sizeof(GRAPHICS::BatchVertex) * vertexCount);
 	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
@@ -1073,8 +1072,6 @@ bool ImageRenderLayer::CreateRawUploadBuffer(uint32_t maxByteSize)
 	if (FAILED(hr))
 		return false;
 
-	// 이전에는 대입되지 않아 위쪽 early-return 이 동작하지 않았고,
-	// 매 업로드마다 버퍼를 재생성하고 있었다.
 	m_maxByteSize = maxByteSize;
 
 	return true;
@@ -1237,7 +1234,7 @@ bool ImageRenderLayer::RenderTiled()
 			const float x1 = min((float)rect.right, imageWidth);
 			const float y1 = min((float)rect.bottom, imageHeight);
 
-			uint32_t tw, th;
+			uint32_t tw = 0, th = 0;
 			m_tileManager->GetTileSize(data.targetKey.lod, tw, th);
 			const float scale = (float)(1 << data.targetKey.lod);
 
@@ -1430,9 +1427,3 @@ void ImageRenderLayer::UpdateVertexBuffer(const std::vector<GRAPHICS::BatchVerte
 		m_contextD3D->Unmap(m_tileVertexBuffer, 0);
 	}
 }
-
-
-
-
-
-

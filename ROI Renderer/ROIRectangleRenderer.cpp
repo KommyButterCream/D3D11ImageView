@@ -22,13 +22,13 @@ ROIRectangleRenderer::ROIRectangleRenderer(const wchar_t* key)
 	}
 }
 
-bool ROIRectangleRenderer::UpdateDefinition(const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, long fontSize)
+bool ROIRectangleRenderer::UpdateDefinition(const wchar_t* name, const Rect2f& rect, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	m_name = name ? name : L"";
 	m_rect = rect;
 	m_rect.Normalize();
 	m_colorRGB = static_cast<uint32_t>(rgb);
-	m_strokeColor = ConvertColor(rgb);
+	m_strokeColor = ROIUtilities::ConvertColor(rgb);
 	m_isMovable = isMovable;
 	m_isResizable = isResizable;
 	m_fontSize = fontSize;
@@ -110,7 +110,7 @@ ROIHitResult ROIRectangleRenderer::HitTest(const Point2f& imagePoint, float tole
 		const Point2f bottomLeft = { m_rect.left, m_rect.bottom };
 		const Point2f bottomRight = { m_rect.right, m_rect.bottom };
 
-		const float topLeftDistance = DistanceToPoint(imagePoint, topLeft);
+		const float topLeftDistance = ROIUtilities::DistanceToPoint(imagePoint, topLeft);
 		if (topLeftDistance <= tolerance)
 		{
 			hitResult.type = ROIHitType::TopLeft;
@@ -118,7 +118,7 @@ ROIHitResult ROIRectangleRenderer::HitTest(const Point2f& imagePoint, float tole
 			return hitResult;
 		}
 
-		const float topRightDistance = DistanceToPoint(imagePoint, topRight);
+		const float topRightDistance = ROIUtilities::DistanceToPoint(imagePoint, topRight);
 		if (topRightDistance <= tolerance)
 		{
 			hitResult.type = ROIHitType::TopRight;
@@ -126,7 +126,7 @@ ROIHitResult ROIRectangleRenderer::HitTest(const Point2f& imagePoint, float tole
 			return hitResult;
 		}
 
-		const float bottomLeftDistance = DistanceToPoint(imagePoint, bottomLeft);
+		const float bottomLeftDistance = ROIUtilities::DistanceToPoint(imagePoint, bottomLeft);
 		if (bottomLeftDistance <= tolerance)
 		{
 			hitResult.type = ROIHitType::BottomLeft;
@@ -134,7 +134,7 @@ ROIHitResult ROIRectangleRenderer::HitTest(const Point2f& imagePoint, float tole
 			return hitResult;
 		}
 
-		const float bottomRightDistance = DistanceToPoint(imagePoint, bottomRight);
+		const float bottomRightDistance = ROIUtilities::DistanceToPoint(imagePoint, bottomRight);
 		if (bottomRightDistance <= tolerance)
 		{
 			hitResult.type = ROIHitType::BottomRight;
@@ -208,27 +208,6 @@ void ROIRectangleRenderer::EndDrag()
 	m_activeHit = {};
 }
 
-float ROIRectangleRenderer::DistanceToPoint(const Point2f& point1, const Point2f& point2)
-{
-	const float deltaX = point1.x - point2.x;
-	const float deltaY = point1.y - point2.y;
-	return sqrtf(deltaX * deltaX + deltaY * deltaY);
-}
-
-D2D1_COLOR_F ROIRectangleRenderer::ConvertColor(COLORREF rgb)
-{
-	return {
-		static_cast<float>(GetRValue(rgb)) / 255.0f,
-		static_cast<float>(GetGValue(rgb)) / 255.0f,
-		static_cast<float>(GetBValue(rgb)) / 255.0f,
-		1.0f
-	};
-}
-
-
-/*---------------------------------------------------------
-	조회 (IROIObject)
----------------------------------------------------------*/
 const std::wstring& ROIRectangleRenderer::GetName() const
 {
 	return m_name;
@@ -241,7 +220,7 @@ uint32_t ROIRectangleRenderer::GetColorRGB() const
 
 int32_t ROIRectangleRenderer::GetFontSize() const
 {
-	return static_cast<int32_t>(m_fontSize);
+	return m_fontSize;
 }
 
 void ROIRectangleRenderer::GetShape(ROIShapeData& outShape) const
@@ -256,8 +235,7 @@ void ROIRectangleRenderer::GetShape(ROIShapeData& outShape) const
 	outShape.u.rect.bottom = m_rect.bottom;
 }
 
-uint32_t ROIRectangleRenderer::GetVertices(Core::ShapeType::Point2f* buffer,
-	uint32_t capacity, uint32_t /*segmentsPerCurve*/) const
+uint32_t ROIRectangleRenderer::GetVertices(Core::ShapeType::Point2f* buffer, uint32_t capacity, uint32_t /*segmentsPerCurve*/) const
 {
 	constexpr uint32_t kNeeded = 4;
 

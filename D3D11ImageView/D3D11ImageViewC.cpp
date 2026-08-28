@@ -576,7 +576,7 @@ extern "C" {
 
 		const bool ok = self->ROISet(key, name ? name : L"", nativeRect,
 			static_cast<COLORREF>(colorRGB),
-			isMovable != 0, isResizable != 0, static_cast<long>(fontSize));
+			isMovable != 0, isResizable != 0, fontSize);
 
 		return ok ? D3IV_OK : D3IV_ERR_FAILED;
 
@@ -597,7 +597,7 @@ extern "C" {
 
 		const bool ok = self->ROISet(key, name ? name : L"", nativeEllipse,
 			static_cast<COLORREF>(colorRGB),
-			isMovable != 0, isResizable != 0, static_cast<long>(fontSize));
+			isMovable != 0, isResizable != 0, fontSize);
 
 		return ok ? D3IV_OK : D3IV_ERR_FAILED;
 
@@ -617,7 +617,7 @@ extern "C" {
 
 		const bool ok = self->ROISet(key, name ? name : L"", nativeCircle,
 			static_cast<COLORREF>(colorRGB),
-			isMovable != 0, isResizable != 0, static_cast<long>(fontSize));
+			isMovable != 0, isResizable != 0, fontSize);
 
 		return ok ? D3IV_OK : D3IV_ERR_FAILED;
 
@@ -645,7 +645,7 @@ extern "C" {
 
 		const bool ok = self->ROISet(key, name ? name : L"", polygon,
 			static_cast<COLORREF>(colorRGB),
-			isMovable != 0, isResizable != 0, static_cast<long>(fontSize));
+			isMovable != 0, isResizable != 0, fontSize);
 
 		return ok ? D3IV_OK : D3IV_ERR_FAILED;
 

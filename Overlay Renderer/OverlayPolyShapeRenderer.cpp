@@ -85,9 +85,7 @@ void OverlayPolyShapeRenderer::Render(const OverlayRenderContext& context) const
 	context.strokeBrush->SetColor(style.strokeColorD2D);
 	context.fillBrush->SetColor(style.fillColorD2D);
 
-	// 주의: 다른 렌더러(Ellipse/Rectangle)는 style.transparentFill 을 보는데
-	// 여기만 보지 않는다. 기존 동작을 유지하려고 그대로 두었다.
-	if (m_polyShape.isClosed)
+	if (m_polyShape.isClosed && !style.transparentFill)
 	{
 		context.d2dContext->FillGeometry(m_geometry, context.fillBrush);
 	}
@@ -97,9 +95,6 @@ void OverlayPolyShapeRenderer::Render(const OverlayRenderContext& context) const
 
 void OverlayPolyShapeRenderer::OnDeviceLost()
 {
-	// 지오메트리는 ID2D1Factory 소속인데, 이 엔진은 디바이스 재생성 시
-	// D2D 팩토리까지 다시 만든다. 옛 팩토리의 지오메트리를 새 컨텍스트로
-	// 그리면 D2DERR_WRONG_FACTORY 가 나므로 버리고 다시 만들게 한다.
 	SafeRelease(m_geometry);
 	m_geometryBuildFailed = false;
 }

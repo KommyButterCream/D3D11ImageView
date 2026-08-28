@@ -5,12 +5,6 @@
 
 #include <d2d1_1.h>
 
-// 오버레이 렌더러들이 공유하는 헬퍼.
-// (ROI 쪽의 ROIUtilities.h 와 같은 역할)
-//
-// 도형별 렌더러 파일을 나눠 둔 것은 디버깅 시 코드와 1:1 로 대응시키기 위한
-// 의도적인 구조다. 여기에는 도형 로직이 아니라 공통 계산만 둔다.
-
 namespace OverlayUtilities
 {
 	// ImageSpace 에서는 D2D 변환 행렬에 zoom 이 들어가 있으므로
