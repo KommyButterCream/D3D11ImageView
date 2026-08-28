@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "../../../Module/Core/ShapeType/Circle2f.h"
 #include "../../../Module/Core/ShapeType/Ellipse2f.h"
@@ -15,7 +16,6 @@
 #include "../../../Module/Core/ShapeType/Rect2f.h"
 
 #include <memory>
-#include <vector>
 
 class Camera2D;
 class IRenderContext;
@@ -114,6 +114,15 @@ private:
 	Core::ShapeType::Rect2f ToScreenBounds(const Core::ShapeType::Rect2f& bounds) const;
 	bool IsVisibleOnClient(const Core::ShapeType::Rect2f& bounds, const Core::ShapeType::Rect2f& visibleRect, float padding) const;
 
+	// 이름 라벨. 도형과 달리 화면 좌표계에서 그린다.
+	//
+	// 도형 패스는 이미지 좌표계 변환(Scale(zoom) * Translate) 아래에서 그리는데,
+	// 그 상태로 텍스트를 그리면 배율에 따라 글자 크기가 같이 변한다. fontSize 를
+	// zoom 으로 나눠 보정하는 방법도 있지만, 고배율에서 폰트 크기가 1 이하로
+	// 내려가 글리프가 뭉개진다. 그래서 변환을 되돌리고 앵커만 화면 좌표로
+	// 옮겨서 실제 픽셀 크기로 그린다. fontSize 는 화면 픽셀 단위다.
+	void RenderNameLabels(const Core::ShapeType::Rect2f& visibleRect);
+
 	Core::ShapeType::Point2f ScreenToImage(float screenX, float screenY) const;
 	float GetHitToleranceInImage() const;
 
@@ -122,6 +131,17 @@ private:
 	void RemoveObjectByKey(const wchar_t* key);
 	IROIObject* HitTest(const Core::ShapeType::Point2f& imagePoint, float tolerance, ROIHitResult& hitResult) const;
 	bool UpdateHoverObject(IROIObject* hoveredObject);
+
+	// 라벨 텍스트 레이아웃 캐시.
+	//
+	// CreateTextLayout 은 문자 분류/셰이핑/줄바꿈을 실제로 수행해서 라벨 하나당
+	// 약 12us 든다(D2D 프리미티브 드로우 420ns 의 28배). ROI 100개면 프레임당
+	// 0.95ms 로 240fps 예산의 23% 다. 캐시하면 50배 빨라진다.
+	//
+	// IDWriteTextLayout 은 DWrite 객체라 D3D 디바이스와 무관하다. 디바이스
+	// 로스트에도 살아남으므로 OnDeviceLost 에서 버릴 필요가 없다.
+	void InvalidateLabelCache(const IROIObject* roiObject);
+	void ReleaseLabelCache();
 
 	// 락 안에서 호출한다. 큐에만 쌓는다.
 	void QueueEvent(ROIEvent event, const std::wstring& key);
@@ -168,6 +188,24 @@ private:
 		std::wstring key;
 	};
 	std::vector<PendingEvent> m_pendingEvents;
+
+	// 라벨 캐시. 키는 ROI 객체 주소다.
+	//
+	// 소유권이 m_roiObjects 에 있으므로 객체가 사라질 때 반드시 같이 지운다.
+	// 안 지우면 같은 주소에 새 객체가 잡혔을 때 옛 라벨이 붙는다(ABA).
+	// 지우는 곳은 RemoveObjectByKey / ROIClear / Shutdown 세 군데다.
+	//
+	// 스레드: 렌더 스레드만 채우고 읽는다(shared 락 안). 지우는 쪽은 전부
+	// exclusive 락이라 렌더와 배타적이다.
+	struct LabelCache
+	{
+		std::wstring name;
+		int32_t fontSize = 0;
+		IDWriteTextLayout* layout = nullptr;
+		float width = 0.0f;
+		float height = 0.0f;
+	};
+	std::unordered_map<const IROIObject*, LabelCache> m_labelCache;
 };
 
 

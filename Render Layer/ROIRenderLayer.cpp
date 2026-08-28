@@ -10,6 +10,10 @@
 
 #include "../../../Module/D3D11Engine/Camera/Camera2D.h"
 #include "../../../Module/D3D11EngineInterface/IRenderContext.h"
+#include "../../../Module/D3D11EngineInterface/IRenderEngine.h"
+#include "../../../Module/D3D11Engine/Font/FontManager.h"
+
+#include "../ROI Renderer/ROIUtilities.h"
 
 using namespace Core::ShapeType;
 
@@ -124,10 +128,179 @@ bool ROIRenderLayer::Render()
 		m_selectedObject->Render(renderContext, true, m_selectedObject == m_hoveredObject);
 	}
 
+	// 라벨은 화면 좌표계에서 그린다. 변환을 먼저 되돌린다.
+	// 도형을 전부 그린 뒤이므로 라벨이 항상 위에 온다.
+	m_d2dContext->SetTransform(originalTransform);
+	RenderNameLabels(visibleRect);
+
 	::ReleaseSRWLockShared(&m_roiLock);
 
-	m_d2dContext->SetTransform(originalTransform);
 	return true;
+}
+
+void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
+{
+	// 호출자가 m_roiLock 을 shared 로 쥐고 있다.
+	if (!m_context || !m_d2dContext || !m_strokeBrush || !m_fillBrush)
+	{
+		return;
+	}
+
+	IRenderEngine* engine = m_context->GetEngine();
+	FontManager* fontManager = engine ? engine->GetFontManager() : nullptr;
+	if (!fontManager)
+	{
+		return;
+	}
+
+	IDWriteFactory* dwriteFactory = fontManager->GetDWriteFactory();
+	if (!dwriteFactory)
+	{
+		return;
+	}
+
+	constexpr float kPaddingX = 5.0f;
+	constexpr float kPaddingY = 2.0f;
+	constexpr float kGap = 3.0f;        // 도형과 라벨 사이 간격
+	constexpr float kCornerRadius = 3.0f;
+	constexpr float kDefaultFontSize = 14.0f;
+
+	for (const auto& roiObject : m_roiObjects)
+	{
+		const std::wstring& name = roiObject->GetName();
+		if (name.empty())
+		{
+			// 이름이 비면 라벨을 그리지 않는다. 호스트가 ROISet 에 L"" 를
+			// 넘겨 끄는 방법이라, 이를 위한 별도 API 를 두지 않는다.
+			continue;
+		}
+
+		if (!IsVisibleOnClient(roiObject->GetBounds(), visibleRect, 0.0f))
+		{
+			continue;
+		}
+
+		const int32_t rawFontSize = roiObject->GetFontSize();
+		const float fontSize = (rawFontSize > 0)
+			? static_cast<float>(rawFontSize)
+			: kDefaultFontSize;
+
+		// 캐시 조회. 이름이나 글자 크기가 바뀌면 다시 만든다.
+		LabelCache& cache = m_labelCache[roiObject.get()];
+
+		if (!cache.layout || cache.name != name || cache.fontSize != rawFontSize)
+		{
+			SafeRelease(cache.layout);
+			cache.width = 0.0f;
+			cache.height = 0.0f;
+
+			IDWriteTextFormat* textFormat = fontManager->GetTextFormat(
+				L"Segoe UI", fontSize, DWRITE_FONT_WEIGHT_NORMAL);
+			if (!textFormat)
+			{
+				continue;
+			}
+
+			IDWriteTextLayout* textLayout = nullptr;
+			const HRESULT hr = dwriteFactory->CreateTextLayout(
+				name.c_str(), static_cast<UINT32>(name.size()),
+				textFormat, FLT_MAX, FLT_MAX, &textLayout);
+
+			if (FAILED(hr) || !textLayout)
+			{
+				continue;
+			}
+
+			textLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+			textLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+
+			// 이름이 길어도 접지 않는다. 접히면 판 높이 계산과 어긋난다.
+			textLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+			DWRITE_TEXT_METRICS metrics = {};
+			if (FAILED(textLayout->GetMetrics(&metrics)))
+			{
+				textLayout->Release();
+				continue;
+			}
+
+			cache.layout = textLayout;
+			cache.name = name;
+			cache.fontSize = rawFontSize;
+			cache.width = metrics.width;
+			cache.height = metrics.height;
+		}
+
+		IDWriteTextLayout* textLayout = cache.layout;
+
+		const float plateWidth = cache.width + kPaddingX * 2.0f;
+		const float plateHeight = cache.height + kPaddingY * 2.0f;
+
+		const Rect2f screenBounds = ToScreenBounds(roiObject->GetBounds());
+
+		// 기본은 도형 바깥 위쪽. 도형을 가리지 않는다.
+		float plateLeft = screenBounds.left;
+		float plateTop = screenBounds.top - plateHeight - kGap;
+
+		// 위쪽 공간이 없으면 도형 안쪽 상단으로 뒤집는다.
+		// 도형이 뷰 상단에 걸쳐 있을 때 라벨이 잘리는 흔한 경우를 덮는다.
+		if (plateTop < visibleRect.top)
+		{
+			plateTop = screenBounds.top + kGap;
+		}
+
+		// 화면 경계로 클램프하지는 않는다.
+		//
+		// 라벨을 뷰포트 모서리에 붙이면 내장 툴바(좌측)와 상태바(하단) 뒤로
+		// 들어간다. UI 레이어가 ROI 레이어보다 뒤에 그려지기 때문인데,
+		// 그렇다고 여기서 툴바 크기를 알아내는 것은 레이어 간 결합이다.
+		// 라벨은 도형에 붙어 다니게 두고, 도형이 화면 밖으로 스크롤되면
+		// 라벨도 같이 나간다. 뷰포트 안쪽 여유 영역을 따로 받아야 풀 수 있는
+		// 문제라 지금은 그대로 둔다.
+
+		const D2D1_ROUNDED_RECT plate = {
+			{ plateLeft, plateTop, plateLeft + plateWidth, plateTop + plateHeight },
+			kCornerRadius,
+			kCornerRadius
+		};
+
+		// 배경 이미지가 밝은지 어두운지 알 수 없으므로 어두운 판을 깔고
+		// 그 위에 ROI 색으로 쓴다. 라벨이 여러 개 겹쳐도 어느 ROI 것인지
+		// 색으로 구분된다. 핸들의 흰 채움 + ROI색 테두리와 같은 전략이다.
+		m_fillBrush->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.62f));
+		m_d2dContext->FillRoundedRectangle(plate, m_fillBrush);
+
+		m_strokeBrush->SetColor(ROIUtilities::ConvertColor(
+			static_cast<COLORREF>(roiObject->GetColorRGB())));
+
+		m_d2dContext->DrawTextLayout(
+			{ plateLeft + kPaddingX, plateTop + kPaddingY },
+			textLayout,
+			m_strokeBrush,
+			D2D1_DRAW_TEXT_OPTIONS_NONE);
+	}
+}
+
+void ROIRenderLayer::InvalidateLabelCache(const IROIObject* roiObject)
+{
+	auto iterator = m_labelCache.find(roiObject);
+	if (iterator == m_labelCache.end())
+	{
+		return;
+	}
+
+	SafeRelease(iterator->second.layout);
+	m_labelCache.erase(iterator);
+}
+
+void ROIRenderLayer::ReleaseLabelCache()
+{
+	for (auto& entry : m_labelCache)
+	{
+		SafeRelease(entry.second.layout);
+	}
+
+	m_labelCache.clear();
 }
 
 void ROIRenderLayer::OnDeviceLost()
@@ -259,6 +432,7 @@ bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Polyg
 void ROIRenderLayer::ROIClear()
 {
 	::AcquireSRWLockExclusive(&m_roiLock);
+	ReleaseLabelCache();
 	m_roiObjects.clear();
 	m_hoveredObject = nullptr;
 	m_selectedObject = nullptr;
@@ -557,6 +731,9 @@ void ROIRenderLayer::RemoveObjectByKey(const wchar_t* key)
 			m_activeHit = {};
 			m_isDragging = false;
 		}
+
+		// 캐시는 객체 주소가 키다. 같은 주소에 새 객체가 잡히기 전에 지운다.
+		InvalidateLabelCache(roiObject);
 
 		m_roiObjects.erase(iterator);
 		return;
