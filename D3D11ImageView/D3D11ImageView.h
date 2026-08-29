@@ -37,6 +37,7 @@
 
 // ROIObjectType / ROIShapeData. 조회 API 가 해석적 형상을 그대로 내보낸다.
 #include "../ROI Renderer/IROIObject.h"
+#include "../Lut/LutTable.h"
 
 using Core::ShapeType::Circle2d;
 using Core::ShapeType::Circle2f;
@@ -368,6 +369,29 @@ public:
 	// 실패하면 false. 이미지가 없거나, 경로를 쓸 수 없거나, 그 조합을
 	// 인코딩할 수 없는 경우다.
 	bool SaveImage(const wchar_t* filePath);
+
+	// ── 표시용 LUT ───────────────────────────────────────────────────
+	//
+	// 자동 대비(퍼센타일 스트레치)와 컬러맵을 함께 적용한다.
+	//
+	// **Gray(1채널) 이미지 전용이다.** 컬러 이미지는 이미 표시용 공간으로
+	// 나온 결과라 다시 매핑할 이유가 없고, 의사색을 씌우면 실제 색을 버리게
+	// 된다. 컬러가 붙어 있으면 IsLutSupported() 가 false 를 주고 켜도
+	// 아무 일도 일어나지 않는다.
+	//
+	// 16bit 이미지에서는 사실상 필수다. 백버퍼가 8bit 라 LUT 없이는 65536
+	// 계조가 256 으로 뭉개져 관심 구간이 몇 계조 안에 갇힌다.
+	//
+	// **표시에만 적용된다.** SaveImage 는 원본을 그대로 쓴다 — 검사 데이터에
+	// 표시용 변환이 섞이면 안 되기 때문이다.
+	bool IsLutSupported() const;
+	void SetLutEnabled(bool enable);
+	bool IsLutEnabled() const;
+	void ToggleLut();
+
+	// 프리셋을 바꾸면 LUT 가 자동으로 켜진다.
+	void SetLutPreset(LutPreset preset);
+	LutPreset GetLutPreset() const;
 
 private:
 	// 호스트 콜백. Impl 에는 이 인스턴스를 userData 로 넘기고

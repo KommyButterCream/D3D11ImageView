@@ -5,6 +5,7 @@
 #include "../../../Module/D3D11EngineInterface/IResizeEventListener.h"
 #include "../../../Module/D3D11EngineInterface/IUIRenderLayer.h"
 #include "../../../Module/Core/ImageType/ImageBase.h"
+#include "../Lut/LutTable.h"
 
 // UIStyle 을 값으로 들고 있으므로 전방선언으로는 부족하다.
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Base/UIElementBase.h"
@@ -62,6 +63,19 @@ public:
 	// 거리 측정 버튼의 활성 표시를 켜고 끈다.
 	void SetMeasureButtonActive(bool active);
 
+	// LUT 버튼의 활성 표시를 켜고 끈다.
+	void SetLutButtonActive(bool active);
+
+	// LUT 를 쓸 수 있는 이미지인가. 컬러 이미지면 버튼과 메뉴 항목을
+	// 비활성으로 만든다 — 눌러도 아무 일 없는 버튼보다 낫다.
+	void SetLutAvailable(bool available);
+
+	// 프리셋 체크를 라디오처럼 하나만 켠다.
+	//
+	// enabled 가 false 면 아무 항목도 체크하지 않는다. 체크 표시는
+	// "선택된 프리셋" 이 아니라 "지금 적용 중인 프리셋" 을 뜻한다.
+	void SetLutPresetChecked(LutPreset preset, bool enabled);
+
 private:
 	void RebindFontManager(FontManager* fontManager);
 	bool AcquireDeviceResources();
@@ -106,6 +120,10 @@ private:
 	UIStyle m_buttonNormalStyle = {};
 	UIStyle m_buttonActiveStyle = {};
 
+	// 토글이 켜지면 배경이 밝아지므로 아이콘도 같이 뒤집는다.
+	UIStyle m_iconNormalStyle = {};
+	UIStyle m_iconActiveStyle = {};
+
 	std::unique_ptr<UIContextMenuPanel> m_contextMenuPanel = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_zoomInContextMenuButton = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_zoomOutContextMenuButton = nullptr;
@@ -122,6 +140,13 @@ private:
 	std::shared_ptr<UIContextMenuButton> m_saveImagePngButton = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_saveImageJpegButton = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_saveImageBmpButton = nullptr;
+
+	// LUT
+	std::shared_ptr<UIButton> m_lutButton = nullptr;
+	std::shared_ptr<UIContextMenuButton> m_lutContextMenuButton = nullptr;
+	std::shared_ptr<UIContextMenuPanel> m_lutSubMenu = nullptr;
+	std::shared_ptr<UIContextMenuButton>
+		m_lutPresetButtons[static_cast<size_t>(LutPreset::Count)] = {};
 
 	std::unique_ptr<UIStatusPanel> m_statusPanel = nullptr;
 	std::shared_ptr<UIIconLabel> m_coordinateLabel = nullptr;

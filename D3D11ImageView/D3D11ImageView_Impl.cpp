@@ -470,9 +470,129 @@ void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 		PostSaveImageRequest(SaveImageFormat::Bmp);
 		break;
 
+	case UICommand::ToggleLut:
+		ToggleLut();
+		break;
+
+	// 프리셋을 고르면 LUT 를 함께 켠다.
+	// "Jet 을 골랐는데 화면이 그대로" 를 피한다.
+	case UICommand::LutGrayscale:
+		SetLutPreset(LutPreset::Grayscale);
+		break;
+	case UICommand::LutInverted:
+		SetLutPreset(LutPreset::Inverted);
+		break;
+	case UICommand::LutHot:
+		SetLutPreset(LutPreset::Hot);
+		break;
+	case UICommand::LutViridis:
+		SetLutPreset(LutPreset::Viridis);
+		break;
+	case UICommand::LutJet:
+		SetLutPreset(LutPreset::Jet);
+		break;
+
 	default:
 		break;
 	}
+}
+
+// ────────────────────────────────────────────────────────────────────
+// LUT
+// ────────────────────────────────────────────────────────────────────
+
+bool D3D11ImageView_Impl::IsLutSupported() const
+{
+	return m_imageLayer ? m_imageLayer->SupportsLut() : false;
+}
+
+// UI 를 현재 LUT 상태에 맞춘다.
+//
+// 툴바 버튼의 활성 표시와 메뉴의 체크를 한곳에서 정한다. 체크 표시는
+// "선택된 프리셋" 이 아니라 "지금 적용 중인 프리셋" 을 뜻하므로,
+// LUT 가 꺼져 있으면 아무 항목도 체크되지 않는다.
+void D3D11ImageView_Impl::RefreshLutUi()
+{
+	if (!m_uiLayer || !m_imageLayer)
+		return;
+
+	const bool enabled = m_imageLayer->IsLutEnabled();
+
+	m_uiLayer->SetLutButtonActive(enabled);
+	m_uiLayer->SetLutPresetChecked(m_imageLayer->GetLutPreset(), enabled);
+}
+
+void D3D11ImageView_Impl::SetLutEnabled(bool enable)
+{
+	if (!m_imageLayer)
+		return;
+
+	// 컬러 이미지에는 걸지 않는다.
+	if (enable && !m_imageLayer->SupportsLut())
+		return;
+
+	m_imageLayer->SetLutEnabled(enable);
+
+	RefreshLutUi();
+	InvalidateFrame();
+}
+
+bool D3D11ImageView_Impl::IsLutEnabled() const
+{
+	return m_imageLayer ? m_imageLayer->IsLutEnabled() : false;
+}
+
+void D3D11ImageView_Impl::ToggleLut()
+{
+	SetLutEnabled(!IsLutEnabled());
+}
+
+void D3D11ImageView_Impl::SetLutPreset(LutPreset preset)
+{
+	if (!m_imageLayer)
+		return;
+
+	// ★ 지금 적용 중인 프리셋을 다시 고르면 끈다.
+	//
+	// 라디오 목록에서 같은 항목을 다시 누르는 동작에 "해제" 를 붙였다.
+	// 체크 표시가 "적용 중" 을 뜻하므로 체크를 눌러 끄는 것이 자연스럽다.
+	// 다시 켜는 길은 두 개다 — 툴바 버튼, 또는 아무 프리셋이나 선택.
+	if (m_imageLayer->IsLutEnabled() && m_imageLayer->GetLutPreset() == preset)
+	{
+		SetLutEnabled(false);
+		return;
+	}
+
+	m_imageLayer->SetLutPreset(preset);
+
+	// 프리셋을 고른 것은 "이걸로 보고 싶다" 는 뜻이다.
+	// 이미 켜져 있었다면 SetLutEnabled 가 UI 갱신과 무효화만 한다.
+	SetLutEnabled(true);
+}
+
+LutPreset D3D11ImageView_Impl::GetLutPreset() const
+{
+	return m_imageLayer ? m_imageLayer->GetLutPreset() : LutPreset::Grayscale;
+}
+
+// 새 이미지가 붙은 뒤 UI 를 그 이미지에 맞춘다.
+//
+// 컬러 이미지로 바뀌면 켜져 있던 LUT 를 내리고 버튼을 비활성으로 만든다.
+void D3D11ImageView_Impl::RefreshLutAvailability()
+{
+	if (!m_imageLayer || !m_uiLayer)
+		return;
+
+	const bool supported = m_imageLayer->SupportsLut();
+
+	m_uiLayer->SetLutAvailable(supported);
+
+	if (!supported && m_imageLayer->IsLutEnabled())
+	{
+		m_imageLayer->SetLutEnabled(false);
+	}
+
+	RefreshLutUi();
 }
 
 void D3D11ImageView_Impl::Zoom(float zoomFactor)

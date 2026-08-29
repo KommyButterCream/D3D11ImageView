@@ -40,6 +40,9 @@
     <ClCompile Include="D3D11ImageViewC.cpp" />
     <ClCompile Include="D3D11ImageView_Impl_Query.cpp" />
     <ClCompile Include="D3D11ImageView_Impl_Save.cpp" />
+    <ClCompile Include="..\Lut\LutTable.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="HighResolutionTimer.cpp" />
     <ClCompile Include="D3D11ImageView.cpp" />
     <ClCompile Include="D3D11ImageView_Impl.cpp" />
@@ -86,6 +89,7 @@
     <ClInclude Include="HighResolutionTimer.h" />
     <ClInclude Include="D3D11ImageView.h" />
     <ClInclude Include="D3D11ImageView_Impl.h" />
+    <ClInclude Include="..\Lut\LutTable.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="RenderThread.h" />
   </ItemGroup>

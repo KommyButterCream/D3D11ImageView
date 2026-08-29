@@ -21,6 +21,9 @@
     <Filter Include="Render Layer">
       <UniqueIdentifier>{76f90e8e-675a-4cdf-8e9b-37149a543730}</UniqueIdentifier>
     </Filter>
+    <Filter Include="LUT">
+      <UniqueIdentifier>{d3c76aff-3acc-48bf-a030-37404d21dab4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -109,6 +112,12 @@
     </ClCompile>
     <ClCompile Include="D3D11ImageView_Impl_Query.cpp">
       <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="D3D11ImageView_Impl_Save.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Lut\LutTable.cpp">
+      <Filter>LUT</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -213,6 +222,9 @@
     </ClInclude>
     <ClInclude Include="D3D11ImageViewC.h">
       <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Lut\LutTable.h">
+      <Filter>LUT</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

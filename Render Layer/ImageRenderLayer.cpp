@@ -561,6 +561,10 @@ void ImageRenderLayer::UpdateImageState(ImageInputSource source, uint32_t width,
 	m_texWidth = width;
 	m_texHeight = height;
 
+	// 새 이미지가 붙었으면 스트레치 범위가 달라진다. 다음에 필요할 때
+	// 다시 굽는다(꺼져 있으면 영영 굽지 않으므로 비용이 없다).
+	m_lutDirty = true;
+
 	if (m_camera && needFit)
 	{
 		m_camera->SetImageSize(width, height);
@@ -581,6 +585,142 @@ const Core::ImageType::ImageBase* ImageRenderLayer::GetImage() const
 ImageInputSource ImageRenderLayer::GetInputSource() const
 {
 	return m_inputSource;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// LUT
+// ────────────────────────────────────────────────────────────────────
+
+// LUT 는 Gray 전용이다.
+//
+// 컬러 이미지는 이미 표시용 공간으로 나온 결과라 다시 매핑할 이유가 없고,
+// 의사색을 씌우면 실제 색 정보를 버리게 된다. 텍스처/공유텍스처 입력은
+// BGRA 로 받으므로 여기에 해당한다.
+bool ImageRenderLayer::SupportsLut() const
+{
+	if (m_inputSource != ImageInputSource::RawImage)
+		return false;
+
+	return m_inputChannel == 1;
+}
+
+void ImageRenderLayer::SetLutEnabled(bool enable)
+{
+	if (m_lutEnabled == enable)
+		return;
+
+	m_lutEnabled = enable;
+
+	// 켜는 순간에만 굽는다. 꺼져 있는 동안은 히스토그램 비용이 0 이다.
+	if (m_lutEnabled)
+	{
+		m_lutDirty = true;
+	}
+}
+
+bool ImageRenderLayer::IsLutEnabled() const
+{
+	return m_lutEnabled;
+}
+
+void ImageRenderLayer::SetLutPreset(LutPreset preset)
+{
+	if (m_lutPreset == preset)
+		return;
+
+	m_lutPreset = preset;
+	m_lutDirty = true;
+}
+
+LutPreset ImageRenderLayer::GetLutPreset() const
+{
+	return m_lutPreset;
+}
+
+// 현재 이미지에 맞는 LUT 텍스처를 만든다.
+//
+// 엔트리 수가 비트깊이에 묶여 있어서(8bit 256, 16bit 65536) 이미지가 바뀌면
+// 텍스처를 다시 만들어야 할 수 있다.
+bool ImageRenderLayer::EnsureLutTexture(uint32_t entryCount)
+{
+	if (m_lutTexture && m_lutEntryCount == entryCount)
+		return true;
+
+	SafeRelease(m_lutSRV);
+	SafeRelease(m_lutTexture);
+	m_lutEntryCount = 0;
+
+	if (!m_device || entryCount == 0)
+		return false;
+
+	D3D11_TEXTURE2D_DESC desc = {};
+	desc.Width = entryCount;
+	desc.Height = 1;
+	desc.MipLevels = 1;
+	desc.ArraySize = 1;
+	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	desc.SampleDesc.Count = 1;
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+	if (FAILED(m_device->CreateTexture2D(&desc, nullptr, &m_lutTexture)))
+		return false;
+
+	if (FAILED(m_device->CreateShaderResourceView(m_lutTexture, nullptr, &m_lutSRV)))
+	{
+		SafeRelease(m_lutTexture);
+		return false;
+	}
+
+	m_lutEntryCount = entryCount;
+	return true;
+}
+
+// 히스토그램을 훑어 범위를 구하고 테이블을 구워 올린다.
+//
+// 이 함수만 비용이 있다. 이미지가 바뀌거나 프리셋이 바뀔 때만 불린다.
+bool ImageRenderLayer::RebuildLut()
+{
+	if (!SupportsLut() || !m_image || m_image->IsEmpty())
+		return false;
+
+	const uint32_t bitDepth = GetAttachedBitDepth();
+	const uint32_t entryCount = LutTable::GetTextureEntryCount(bitDepth);
+
+	if (!EnsureLutTexture(entryCount))
+		return false;
+
+	const LutRange range = LutTable::ComputeRange(
+		m_image->ImageBuffer(),
+		static_cast<uint32_t>(m_image->Width()),
+		static_cast<uint32_t>(m_image->Height()),
+		static_cast<uint32_t>(m_image->Stride()),
+		static_cast<uint32_t>(m_image->Channel()),
+		bitDepth);
+
+	std::vector<uint8_t> table(static_cast<size_t>(entryCount) * 4);
+	LutTable::Build(m_lutPreset, entryCount,
+		LutTable::GetDomainMax(bitDepth), range, table.data());
+
+	m_contextD3D->UpdateSubresource(
+		m_lutTexture, 0, nullptr,
+		table.data(), entryCount * 4, 0);
+
+	m_lutDirty = false;
+
+	return true;
+}
+
+// 이번 프레임에 LUT 셰이더를 쓸 수 있는가.
+bool ImageRenderLayer::IsLutActive()
+{
+	if (!m_lutEnabled || !SupportsLut())
+		return false;
+
+	if (m_lutDirty && !RebuildLut())
+		return false;
+
+	return m_lutSRV != nullptr;
 }
 
 ID3D11Texture2D* ImageRenderLayer::GetSingleTexture() const
@@ -615,6 +755,13 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_samplerSingleLinear);
 	SafeRelease(m_samplerSingleMagPoint);
 
+	SafeRelease(m_lutSampler);
+	SafeRelease(m_lutSRV);
+	SafeRelease(m_lutTexture);
+	m_lutEntryCount = 0;
+	// 디바이스가 날아가면 테이블도 같이 사라진다. 다음 프레임에 다시 굽는다.
+	m_lutDirty = true;
+
 	SafeRelease(m_constantBuffer);
 	SafeRelease(m_wireColorBuffer);
 
@@ -630,6 +777,7 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_vs);
 	SafeRelease(m_ps);
 	SafeRelease(m_grayPS);
+	SafeRelease(m_grayLutPS);
 	SafeRelease(m_wirePS);
 
 	SafeRelease(m_singleSRV);
@@ -731,6 +879,43 @@ bool ImageRenderLayer::CreateShaders()
 		);
 
 		SafeRelease(grayPSBlob);
+
+		if (FAILED(hr))
+		{
+			SafeRelease(vsBlob);
+			SafeRelease(psBlob);
+			SafeRelease(wirePSBlob);
+			SafeRelease(errorBlob);
+			return false;
+		}
+	}
+
+	// 단일 채널 + LUT 픽셀 셰이더.
+	//
+	// 상수 버퍼로 분기하지 않고 셰이더를 둘로 나눈다. LUT 를 안 쓰는 경로가
+	// 예전과 완전히 같은 코드로 남으므로 회귀 위험이 없고, 매 픽셀 분기도 없다.
+	{
+		ID3DBlob* grayLutPSBlob = nullptr;
+		hr = ::D3DReadFileToBlob(L"../Shaders/ImageGrayLutPS.cso", &grayLutPSBlob);
+
+		if (FAILED(hr))
+		{
+			SafeRelease(vsBlob);
+			SafeRelease(psBlob);
+			SafeRelease(wirePSBlob);
+			SafeRelease(errorBlob);
+			SafeRelease(grayLutPSBlob);
+			return false;
+		}
+
+		hr = m_device->CreatePixelShader(
+			grayLutPSBlob->GetBufferPointer(),
+			grayLutPSBlob->GetBufferSize(),
+			nullptr,
+			&m_grayLutPS
+		);
+
+		SafeRelease(grayLutPSBlob);
 
 		if (FAILED(hr))
 		{
@@ -912,6 +1097,23 @@ bool ImageRenderLayer::CreateSampler()
 	// 선명한 쪽: 픽셀을 봐야 하는 높은 배율에서 사용
 	sd.Filter = D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR;
 	hr = m_device->CreateSamplerState(&sd, &m_samplerSingleMagPoint);
+	if (FAILED(hr))
+		return false;
+
+	// LUT 전용 샘플러.
+	//
+	// 선형으로 둔다. 텍셀 중심을 정확히 맞추려면 셔이데가 LUT 크기를
+	// 알아야 하고 그러면 상수 버퍼가 다시 필요해진다. 프리셋은
+	// 모두 연속적인 색 램프라 이웃 항목을 섞어도 차이가 없고 더 매넄하다.
+	D3D11_SAMPLER_DESC lutDesc = {};
+	lutDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	lutDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	lutDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	lutDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	lutDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	lutDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	hr = m_device->CreateSamplerState(&lutDesc, &m_lutSampler);
 
 	return SUCCEEDED(hr);
 }
@@ -1358,8 +1560,25 @@ void ImageRenderLayer::SetCommonShaderStates()
 		? m_singleTextureFormat
 		: (m_tileManager ? m_tileManager->GetFormat() : DXGI_FORMAT_B8G8R8A8_UNORM);
 
-	ID3D11PixelShader* pixelShader =
-		TileFormat::IsSingleChannel(activeFormat) ? m_grayPS : m_ps;
+	ID3D11PixelShader* pixelShader = m_ps;
+
+	if (TileFormat::IsSingleChannel(activeFormat))
+	{
+		// LUT 를 켜는 것은 셰이더를 바꿔 끼우는 것뿐이다. 텍스처 재업로드가
+		// 없으므로 토글이 즉시 반영되고, 타일 캐시도 그대로 살아 있다.
+		if (IsLutActive())
+		{
+			pixelShader = m_grayLutPS;
+
+			m_contextD3D->PSSetShaderResources(1, 1, &m_lutSRV);
+			m_contextD3D->PSSetSamplers(1, 1, &m_lutSampler);
+		}
+		else
+		{
+			pixelShader = m_grayPS;
+		}
+	}
+
 	m_contextD3D->PSSetShader(pixelShader, nullptr, 0);
 
 	// Single 은 밉 체인이 있어 LINEAR 축소가 가능하지만, Tiled 는 타일 경계

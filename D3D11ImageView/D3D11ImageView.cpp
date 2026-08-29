@@ -930,6 +930,36 @@ bool D3D11ImageView::SaveImage(const wchar_t* filePath)
 	return m_impl ? m_impl->SaveImage(filePath) : false;
 }
 
+bool D3D11ImageView::IsLutSupported() const
+{
+	return m_impl ? m_impl->IsLutSupported() : false;
+}
+
+void D3D11ImageView::SetLutEnabled(bool enable)
+{
+	if (m_impl) m_impl->SetLutEnabled(enable);
+}
+
+bool D3D11ImageView::IsLutEnabled() const
+{
+	return m_impl ? m_impl->IsLutEnabled() : false;
+}
+
+void D3D11ImageView::ToggleLut()
+{
+	if (m_impl) m_impl->ToggleLut();
+}
+
+void D3D11ImageView::SetLutPreset(LutPreset preset)
+{
+	if (m_impl) m_impl->SetLutPreset(preset);
+}
+
+LutPreset D3D11ImageView::GetLutPreset() const
+{
+	return m_impl ? m_impl->GetLutPreset() : LutPreset::Grayscale;
+}
+
 bool D3D11ImageView::IsMeasureActive() const
 {
 	return m_impl ? m_impl->IsMeasureActive() : false;

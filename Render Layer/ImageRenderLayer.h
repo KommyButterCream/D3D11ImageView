@@ -7,6 +7,7 @@
 #include "../../../Module/Core/ImageType/ImageBase.h"
 
 #include "../Image Tile/TileFormat.h"
+#include "../Lut/LutTable.h"
 
 #include <vector>
 
@@ -93,6 +94,19 @@ public:
 	RenderMode GetRenderMode() const;
 	const Core::ImageType::ImageBase* GetImage() const;
 
+	// ── LUT ──────────────────────────────────────────────────────────
+	//
+	// 1채널(Gray) 이미지에만 적용된다. 컬러 이미지가 붙어 있으면
+	// SupportsLut() 가 false 를 주고 켜도 아무 일도 일어나지 않는다.
+	//
+	// 켜는 순간과 프리셋을 바꾸는 순간에만 테이블을 다시 굽는다.
+	// 토글 자체는 셰이더를 바꿔 끼우는 것뿐이라 재업로드가 없다.
+	bool SupportsLut() const;
+	void SetLutEnabled(bool enable);
+	bool IsLutEnabled() const;
+	void SetLutPreset(LutPreset preset);
+	LutPreset GetLutPreset() const;
+
 	// 어떤 경로로 이미지가 들어왔는지. 저장할 때 CPU 버퍼를 쓸지
 	// GPU 텍스처를 읽어 내릴지 가르는 데 쓴다.
 	ImageInputSource GetInputSource() const;
@@ -136,6 +150,11 @@ private:
 	bool RenderTiled();
 	bool RenderSingle();
 	void SetCommonShaderStates();
+
+	// LUT
+	bool EnsureLutTexture(uint32_t entryCount);
+	bool RebuildLut();
+	bool IsLutActive();
 	void UpdateVertexBuffer(const std::vector<GRAPHICS::BatchVertex>& vertices);
 
 
@@ -151,6 +170,7 @@ private:
 	ID3D11VertexShader* m_vs = nullptr;
 	ID3D11PixelShader* m_ps = nullptr;      // 4채널(BGRA)
 	ID3D11PixelShader* m_grayPS = nullptr;  // 1채널(R8/R16) — .r 을 3채널로 복제
+	ID3D11PixelShader* m_grayLutPS = nullptr; // 1채널 + LUT
 	ID3D11PixelShader* m_wirePS = nullptr;
 	ID3D11InputLayout* m_inputLayout = nullptr;
 	ID3D11ComputeShader* m_singleTextureCS = nullptr;
@@ -172,6 +192,18 @@ private:
 	// Single 축소는 항상 LINEAR + 밉 보간. 확대만 아래 두 개로 갈린다.
 	ID3D11SamplerState* m_samplerSingleLinear = nullptr;    // 확대 LINEAR
 	ID3D11SamplerState* m_samplerSingleMagPoint = nullptr;  // 확대 POINT
+
+	// ── LUT ──────────────────────────────────────────────────────────
+	// N x 1 RGBA8. 자동 대비와 컬러맵이 함께 구워져 있다.
+	ID3D11Texture2D* m_lutTexture = nullptr;
+	ID3D11ShaderResourceView* m_lutSRV = nullptr;
+	ID3D11SamplerState* m_lutSampler = nullptr;
+	uint32_t m_lutEntryCount = 0;
+
+	bool m_lutEnabled = false;
+	LutPreset m_lutPreset = LutPreset::Grayscale;
+	// 테이블을 다시 구워야 하는가(이미지나 프리셋이 바뀜).
+	bool m_lutDirty = true;
 
 	// 현재 POINT 확대를 쓰고 있는가(히스테리시스 상태).
 	bool m_magPointActive = false;

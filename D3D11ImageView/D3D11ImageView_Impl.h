@@ -31,6 +31,7 @@
 // ROIRenderLayer::ROIInfoData / ROIEventHandler, ROIShapeData 를 쓰므로
 // 전방선언으로는 부족하다.
 #include "../Render Layer/ROIRenderLayer.h"
+#include "../Lut/LutTable.h"
 
 using Core::ImageType::ImageBase;
 using Core::ShapeType::Circle2d;
@@ -320,6 +321,18 @@ public:
 	// 거리 측정 도구 토글. 누를 때마다 기존 측정선을 리셋한다.
 	void ToggleMeasureDistance();
 	bool IsMeasureActive() const;
+
+	// 표시용 LUT. Gray 이미지에만 적용된다.
+	bool IsLutSupported() const;
+	void SetLutEnabled(bool enable);
+	bool IsLutEnabled() const;
+	void ToggleLut();
+	void SetLutPreset(LutPreset preset);
+	LutPreset GetLutPreset() const;
+	void RefreshLutAvailability();
+
+	// 툴바 활성 표시와 메뉴 체크를 현재 상태에 맞춘다.
+	void RefreshLutUi();
 
 	// ── 이미지 저장 ──────────────────────────────────────────────────
 	//

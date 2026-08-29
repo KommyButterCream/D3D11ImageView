@@ -11,6 +11,7 @@
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Panel/UIContextMenuPanel.h"
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Button/UIButton.h"
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Button/UIContextMenuButton.h"
+#include "../../../Module/D3D11UIFramework/D3D11UIFramework/Resource/UIIconShape.h"
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Event/UIEventResult.h"
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Splitbar/UISplitBar.h"
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Panel/UIStatusPanel.h"
@@ -176,6 +177,14 @@ void UIRenderLayer::RebindFontManager(FontManager* fontManager)
 
 	// 툴바 — 측정 버튼만 텍스트를 쓴다.
 	if (m_measureButton) m_measureButton->SetFontManager(fontManager);
+	if (m_lutButton)     m_lutButton->SetFontManager(fontManager);
+
+	// LUT 하위 메뉴. 패널의 자식이 아니라 따로 챙겨야 한다.
+	if (m_lutContextMenuButton) m_lutContextMenuButton->SetFontManager(fontManager);
+	for (auto& presetButton : m_lutPresetButtons)
+	{
+		if (presetButton) presetButton->SetFontManager(fontManager);
+	}
 
 	// 상태바 라벨
 	if (m_coordinateLabel) m_coordinateLabel->SetFontManager(fontManager);
@@ -295,7 +304,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomInButton->SetCornerRadius(4.f);
 		m_zoomInButton->SetCommand(UICommand::ZoomIn);
 		m_zoomInButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomInButton->SetIcon(L"../Icons/icon_zoom_in.svg");
+		m_zoomInButton->SetIconShape(UIIconShape::ZoomIn);
 		m_zoomInButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomInButton);
@@ -310,7 +319,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomOutButton->SetCornerRadius(4.f);
 		m_zoomOutButton->SetCommand(UICommand::ZoomOut);
 		m_zoomOutButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomOutButton->SetIcon(L"../Icons/icon_zoom_out.svg");
+		m_zoomOutButton->SetIconShape(UIIconShape::ZoomOut);
 		m_zoomOutButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomOutButton);
@@ -325,7 +334,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoom1To1Button->SetCornerRadius(4.f);
 		m_zoom1To1Button->SetCommand(UICommand::Zoom1to1);
 		m_zoom1To1Button->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoom1To1Button->SetIcon(L"../Icons/icon_zoom_1on1.svg");
+		m_zoom1To1Button->SetIconShape(UIIconShape::ZoomOneToOne);
 		m_zoom1To1Button->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoom1To1Button);
@@ -340,7 +349,7 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomFitButton->SetCornerRadius(4.f);
 		m_zoomFitButton->SetCommand(UICommand::ZoomFit);
 		m_zoomFitButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomFitButton->SetIcon(L"../Icons/icon_zoom_fit_image.svg");
+		m_zoomFitButton->SetIconShape(UIIconShape::ZoomFit);
 		m_zoomFitButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomFitButton);
@@ -349,12 +358,27 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 	// 거리 측정 (토글)
 	{
 		// 활성 상태용 스타일. UIButton 에는 체크 상태가 없어서 스타일을
-		// 갈아 끼워 표시한다. 눌린 색을 normal 로 올려 계속 눌린 것처럼 보이게 한다.
+		// 갈아 끼워 표시한다.
+		//
+		// ★ 명암을 뒤집는다 — 밝은 배경에 어두운 아이콘.
+		//
+		// 예전에는 눌린 색(41)을 normal 로 올려 "계속 눌린 것처럼" 보이게
+		// 했는데, 꺼짐(32)과 9 계조 차이라 실제로는 구분이 안 됐다.
+		// 토글은 한눈에 켜짐/꺼짐이 보여야 한다.
 		m_buttonNormalStyle = buttonDefaultStyle;
 
 		m_buttonActiveStyle = buttonDefaultStyle;
-		m_buttonActiveStyle.normal.fill = UIDefaultColor::buttonPressedColor.ToD2DColor();
-		m_buttonActiveStyle.hover.fill = UIDefaultColor::buttonPressedColor.ToD2DColor();
+		m_buttonActiveStyle.normal.fill = UIDefaultColor::buttonActiveColor.ToD2DColor();
+		m_buttonActiveStyle.hover.fill = UIDefaultColor::buttonActiveHoverColor.ToD2DColor();
+		m_buttonActiveStyle.pressed.fill = UIDefaultColor::buttonActivePressedColor.ToD2DColor();
+
+		// 아이콘은 배경이 밝아진 만큼 어두워져야 보인다.
+		m_iconNormalStyle = buttonIconDefaultStyle;
+
+		m_iconActiveStyle = buttonIconDefaultStyle;
+		m_iconActiveStyle.normal.fill = UIDefaultColor::iconActiveColor.ToD2DColor();
+		m_iconActiveStyle.hover.fill = UIDefaultColor::iconActiveHoverColor.ToD2DColor();
+		m_iconActiveStyle.pressed.fill = UIDefaultColor::iconActivePressedColor.ToD2DColor();
 
 		m_measureButton = std::make_unique<UIButton>();
 
@@ -365,29 +389,31 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_measureButton->SetCommand(UICommand::MeasureDistance);
 		m_measureButton->SetEventDispatcher(m_uiEventDispatcher);
 
-		// 아이콘 대신 글자를 쓴다. UIButton 은 UILabel 을 상속하므로 그대로 된다.
-		// (이 저장소에는 ../Icons 폴더가 없어 기존 버튼들도 아이콘이 비어 있다)
-		//
-		// 텍스트를 쓰는 유일한 툴바 버튼이라 FontManager 를 직접 연결한다.
-		// RebindFontManager 에도 넣어두어야 디바이스 복구 후 해제된 매니저를
-		// 참조하지 않는다.
-		UITextStyle measureTextStyle;
-		wcscpy_s(measureTextStyle.fontName, 50, L"Segoe UI Symbol");
-		measureTextStyle.fontSize = 18.0f;
-		measureTextStyle.weight = DWRITE_FONT_WEIGHT::DWRITE_FONT_WEIGHT_BOLD;
-		measureTextStyle.hAlign = DWRITE_TEXT_ALIGNMENT::DWRITE_TEXT_ALIGNMENT_CENTER;
-		measureTextStyle.vAlign = DWRITE_PARAGRAPH_ALIGNMENT::DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
-		measureTextStyle.normal.fill = UIDefaultColor::iconNormalColor.ToD2DColor();
-		measureTextStyle.hover.fill = UIDefaultColor::iconHoverColor.ToD2DColor();
-		measureTextStyle.pressed.fill = UIDefaultColor::iconPressedColor.ToD2DColor();
-		measureTextStyle.disabled.fill = UIDefaultColor::iconDisabledColor.ToD2DColor();
-
-		m_measureButton->SetFontManager(fontManager);
-		m_measureButton->SetTextStyle(measureTextStyle);
-		m_measureButton->SetText(L"↔");
+		m_measureButton->SetIconShape(UIIconShape::MeasureDistance);
 		m_measureButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_measureButton);
+	}
+
+	// LUT (토글)
+	//
+	// 켜고 끄기만 한다. 어느 테이블을 쓸지는 컨텍스트 메뉴의 LUT 하위
+	// 메뉴에서 고른다 — 자주 하는 동작은 한 번의 클릭으로, 가끔 하는
+	// 선택은 메뉴로 나눈다.
+	{
+		m_lutButton = std::make_shared<UIButton>();
+
+		m_lutButton->SetStyle(m_buttonNormalStyle);
+		m_lutButton->SetLayout({ 0.f, 0.f, buttonSize, buttonSize });
+		m_lutButton->SetRounded(true);
+		m_lutButton->SetCornerRadius(4.f);
+		m_lutButton->SetCommand(UICommand::ToggleLut);
+		m_lutButton->SetEventDispatcher(m_uiEventDispatcher);
+
+		m_lutButton->SetIconShape(UIIconShape::Lut);
+		m_lutButton->SetIconStyle(buttonIconDefaultStyle);
+
+		m_toolbarPanel->AddChild(m_lutButton);
 	}
 
 	// Toolbar Initialize
@@ -496,7 +522,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomInContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoomInContextMenuButton->SetCommand(UICommand::ZoomIn);
 		m_zoomInContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomInContextMenuButton->SetIcon(L"../Icons/icon_zoom_in.svg");
+		m_zoomInContextMenuButton->SetIconShape(UIIconShape::ZoomIn);
 		m_zoomInContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomInContextMenuButton->SetText(L"Zoom In");
 		m_zoomInContextMenuButton->SetExtraText(L"Ctrl +");
@@ -516,7 +542,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomOutContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoomOutContextMenuButton->SetCommand(UICommand::ZoomOut);
 		m_zoomOutContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomOutContextMenuButton->SetIcon(L"../Icons/icon_zoom_out.svg");
+		m_zoomOutContextMenuButton->SetIconShape(UIIconShape::ZoomOut);
 		m_zoomOutContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomOutContextMenuButton->SetText(L"Zoom Out");
 		m_zoomOutContextMenuButton->SetExtraText(L"Ctrl -");
@@ -537,7 +563,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoom1To1ContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoom1To1ContextMenuButton->SetCommand(UICommand::Zoom1to1);
 		m_zoom1To1ContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoom1To1ContextMenuButton->SetIcon(L"../Icons/icon_zoom_1on1.svg");
+		m_zoom1To1ContextMenuButton->SetIconShape(UIIconShape::ZoomOneToOne);
 		m_zoom1To1ContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoom1To1ContextMenuButton->SetText(L"Zoom 1:1");
 		m_zoom1To1ContextMenuButton->SetExtraText(L"Ctrl 1");
@@ -558,7 +584,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomFitContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_zoomFitContextMenuButton->SetCommand(UICommand::ZoomFit);
 		m_zoomFitContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_zoomFitContextMenuButton->SetIcon(L"../Icons/icon_zoom_fit_image.svg");
+		m_zoomFitContextMenuButton->SetIconShape(UIIconShape::ZoomFit);
 		m_zoomFitContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomFitContextMenuButton->SetText(L"Zoom Fit");
 		m_zoomFitContextMenuButton->SetExtraText(L"");
@@ -588,7 +614,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_imageCenterLineContextMenuButton->SetExtraAreaWidth(50.0f);
 		m_imageCenterLineContextMenuButton->SetCommand(UICommand::ImageCenterCrossLine);
 		m_imageCenterLineContextMenuButton->SetEventDispatcher(m_uiEventDispatcher);
-		m_imageCenterLineContextMenuButton->SetIcon(L"../Icons/icon_check.svg");
+		m_imageCenterLineContextMenuButton->SetIconShape(UIIconShape::Check);
 		m_imageCenterLineContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_imageCenterLineContextMenuButton->SetText(L"Show image center line");
 		m_imageCenterLineContextMenuButton->SetExtraText(L"");
@@ -605,6 +631,85 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_contextMenuSplitBar2->SetLayout({ 0.f, 0.f, menuButtonWidth, 3.0f });
 		m_contextMenuSplitBar2->SetSplitbarType(SplitBarType::Horizontal);
 		m_contextMenuPanel->AddChild(m_contextMenuSplitBar2);
+	}
+
+	// ── LUT ▸ (하위 메뉴) ────────────────────────────────────────────
+	//
+	// 프리셋은 라디오다. 하나를 고르면 나머지 체크가 풀린다.
+	{
+		m_lutContextMenuButton = std::make_shared<UIContextMenuButton>();
+
+		m_lutContextMenuButton->SetFontManager(fontManager);
+		m_lutContextMenuButton->SetStyle(contextMenuButtonDefaultStyle);
+		m_lutContextMenuButton->SetLayout({ 0.f, 0.f, menuButtonWidth, menuButtonHeight });
+		m_lutContextMenuButton->SetRounded(true);
+		m_lutContextMenuButton->SetCornerRadius(2.f);
+		m_lutContextMenuButton->SetIconAreaWidth(30.0f);
+		m_lutContextMenuButton->SetExtraAreaWidth(50.0f);
+		m_lutContextMenuButton->SetText(L"LUT");
+		m_lutContextMenuButton->SetTextStyle(contextMenuButtonTextDefaultStyle);
+
+		m_contextMenuPanel->AddChild(m_lutContextMenuButton);
+
+		constexpr float subMenuWidth = 200.0f;
+		constexpr float subMenuButtonWidth = subMenuWidth - (padding * 2.0f);
+
+		m_lutSubMenu = std::make_shared<UIContextMenuPanel>();
+
+		UIStyle& lutMenuStyle = m_lutSubMenu->GetStyle();
+		lutMenuStyle.borderThickness = 0.0f;
+		lutMenuStyle.normal.fill = UIDefaultColor::contextMenuPanelNormalColor.ToD2DColor();
+		lutMenuStyle.normal.border = UIDefaultColor::contextMenuPanelBorderColor.ToD2DColor();
+
+		m_lutSubMenu->SetMenuWidth(subMenuWidth);
+		m_lutSubMenu->SetPadding(padding);
+		m_lutSubMenu->SetSpacing(spacing);
+		m_lutSubMenu->SetLayoutType(UILayoutType::Vertical);
+		m_lutSubMenu->SetRounded(true);
+		m_lutSubMenu->SetCornerRadius(4.f);
+
+		struct LutMenuItem
+		{
+			LutPreset preset;
+			UICommand command;
+		};
+
+		const LutMenuItem items[] = {
+			{ LutPreset::Grayscale, UICommand::LutGrayscale },
+			{ LutPreset::Inverted,  UICommand::LutInverted  },
+			{ LutPreset::Hot,       UICommand::LutHot       },
+			{ LutPreset::Viridis,   UICommand::LutViridis   },
+			{ LutPreset::Jet,       UICommand::LutJet       },
+		};
+
+		for (const LutMenuItem& item : items)
+		{
+			auto button = std::make_shared<UIContextMenuButton>();
+
+			button->SetFontManager(fontManager);
+			button->SetStyle(contextMenuButtonDefaultStyle);
+			button->SetLayout({ 0.f, 0.f, subMenuButtonWidth, menuButtonHeight });
+			button->SetRounded(true);
+			button->SetCornerRadius(2.f);
+			button->SetIconAreaWidth(30.0f);
+			button->SetExtraAreaWidth(10.0f);
+			button->SetCommand(item.command);
+			button->SetEventDispatcher(m_uiEventDispatcher);
+			button->SetIconShape(UIIconShape::Check);
+			button->SetIconStyle(contextMenuButtonIconDefaultStyle);
+			button->SetText(LutTable::GetPresetName(item.preset));
+			button->SetTextStyle(contextMenuButtonTextDefaultStyle);
+			button->SetCheckable(true);
+
+			m_lutSubMenu->AddChild(button);
+			m_lutPresetButtons[static_cast<size_t>(item.preset)] = button;
+		}
+
+		m_contextMenuPanel->AttachSubMenu(
+			m_lutContextMenuButton.get(), m_lutSubMenu);
+
+		// LUT 는 껰진 채로 시작하므로 아무 항목도 체크하지 않는다.
+		SetLutPresetChecked(LutPreset::Grayscale, false);
 	}
 
 	// ── Save image ▸ (하위 메뉴) ─────────────────────────────────────
@@ -798,7 +903,7 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 		m_coordinateLabel->SetTextStyle(statusLabelTextDefaultStyle);
 		m_coordinateLabel->SetIconAreaWidth(iconWidth);
 		m_coordinateLabel->SetTextAreaWidth(textWidth);
-		m_coordinateLabel->SetIcon(L"../Icons/icon_arrow.svg");
+		m_coordinateLabel->SetIconShape(UIIconShape::Cursor);
 		m_coordinateLabel->SetIconScale(0.6f);
 		m_coordinateLabel->SetIconStyle(statusLabelIconDefaultStyle);
 
@@ -833,7 +938,7 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 		m_colorLabel->SetTextStyle(statusLabelTextDefaultStyle);
 		m_colorLabel->SetIconAreaWidth(iconWidth);
 		m_colorLabel->SetTextAreaWidth(textWidth);
-		m_colorLabel->SetIcon(L"../Icons/icon_color.svg");
+		m_colorLabel->SetIconShape(UIIconShape::Palette);
 		m_colorLabel->SetIconScale(0.6f);
 		m_colorLabel->SetIconStyle(statusLabelIconDefaultStyle);
 
@@ -894,7 +999,7 @@ bool UIRenderLayer::InitializeStatusbar(IRenderContext* context, float toolbarWi
 		m_imageSizeLabel->SetTextStyle(statusLabelTextDefaultStyle);
 		m_imageSizeLabel->SetIconAreaWidth(iconWidth);
 		m_imageSizeLabel->SetTextAreaWidth(textWidth);
-		m_imageSizeLabel->SetIcon(L"../Icons/icon_imagesize.svg");
+		m_imageSizeLabel->SetIconShape(UIIconShape::ImageSize);
 		m_imageSizeLabel->SetIconScale(0.6f);
 		m_imageSizeLabel->SetIconStyle(statusLabelIconDefaultStyle);
 
@@ -1077,4 +1182,47 @@ void UIRenderLayer::SetMeasureButtonActive(bool active)
 	}
 
 	m_measureButton->SetStyle(active ? m_buttonActiveStyle : m_buttonNormalStyle);
+	m_measureButton->SetIconStyle(active ? m_iconActiveStyle : m_iconNormalStyle);
+}
+
+void UIRenderLayer::SetLutButtonActive(bool active)
+{
+	if (!m_lutButton)
+	{
+		return;
+	}
+
+	m_lutButton->SetStyle(active ? m_buttonActiveStyle : m_buttonNormalStyle);
+	m_lutButton->SetIconStyle(active ? m_iconActiveStyle : m_iconNormalStyle);
+}
+
+void UIRenderLayer::SetLutAvailable(bool available)
+{
+	// 컬러 이미지에는 LUT 를 걸지 않는다. 눌러도 아무 일 없는 버튼을
+	// 남겨두는 대신 비활성으로 만들어 이유를 눈에 보이게 한다.
+	const UIElementState state = available
+		? UIElementState::Normal
+		: UIElementState::Disabled;
+
+	if (m_lutButton)
+	{
+		m_lutButton->SetState(state);
+	}
+
+	if (m_lutContextMenuButton)
+	{
+		m_lutContextMenuButton->SetState(state);
+	}
+}
+
+void UIRenderLayer::SetLutPresetChecked(LutPreset preset, bool enabled)
+{
+	for (size_t i = 0; i < static_cast<size_t>(LutPreset::Count); ++i)
+	{
+		if (m_lutPresetButtons[i])
+		{
+			const bool checked = enabled && (i == static_cast<size_t>(preset));
+			m_lutPresetButtons[i]->SetChecked(checked);
+		}
+	}
 }

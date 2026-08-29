@@ -185,6 +185,13 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 
 	SafeRelease(pendingUpdate.texture);
 
+	// 이미지가 바뀌면 LUT 를 쓸 수 있는지도 바뀐다.
+	// 컬러로 넘어갔으면 켜져 있던 LUT 를 내리고 버튼을 비활성으로 만든다.
+	if (result)
+	{
+		RefreshLutAvailability();
+	}
+
 	return result;
 }
 
