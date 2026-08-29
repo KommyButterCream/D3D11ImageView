@@ -836,7 +836,7 @@ UIEventResult UIRenderLayer::OnMouseEvent(UIMouseEventType type, float x, float 
 	if (m_contextMenuPanel &&
 		(m_contextMenuPanel->IsVisible() || type == UIMouseEventType::RButtonUp))
 	{
-		if (m_contextMenuPanel->HandleMouseEvent(type, x, y))
+		if (m_contextMenuPanel->OnMouseEvent(type, x, y))
 		{
 			return UIEventResult::ContextMenu;
 		}
@@ -844,7 +844,7 @@ UIEventResult UIRenderLayer::OnMouseEvent(UIMouseEventType type, float x, float 
 
 	if (m_toolbarPanel && m_toolbarPanel->IsVisible())
 	{
-		if (m_toolbarPanel->HandleMouseEvent(type, x, y))
+		if (m_toolbarPanel->OnMouseEvent(type, x, y))
 		{
 			return UIEventResult::Toolbar;
 		}
@@ -852,7 +852,7 @@ UIEventResult UIRenderLayer::OnMouseEvent(UIMouseEventType type, float x, float 
 
 	if (m_statusPanel && m_statusPanel->IsVisible())
 	{
-		if (m_statusPanel->HandleMouseEvent(type, x, y))
+		if (m_statusPanel->OnMouseEvent(type, x, y))
 		{
 			return UIEventResult::StatusPanel;
 		}
