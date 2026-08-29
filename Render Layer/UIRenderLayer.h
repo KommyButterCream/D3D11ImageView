@@ -63,8 +63,14 @@ public:
 	// 거리 측정 버튼의 활성 표시를 켜고 끈다.
 	void SetMeasureButtonActive(bool active);
 
+	// 각도 측정 버튼의 활성 표시를 켜고 끈다.
+	void SetAngleButtonActive(bool active);
+
 	// LUT 버튼의 활성 표시를 켜고 끈다.
 	void SetLutButtonActive(bool active);
+
+	// 픽셀 격자 버튼의 활성 표시.
+	void SetPixelGridButtonActive(bool active);
 
 	// LUT 를 쓸 수 있는 이미지인가. 컬러 이미지면 버튼과 메뉴 항목을
 	// 비활성으로 만든다 — 눌러도 아무 일 없는 버튼보다 낫다.
@@ -114,6 +120,7 @@ private:
 	std::shared_ptr<UIButton> m_zoom1To1Button = nullptr;
 	std::shared_ptr<UIButton> m_zoomFitButton = nullptr;
 	std::shared_ptr<UIButton> m_measureButton = nullptr;
+	std::shared_ptr<UIButton> m_angleButton = nullptr;
 
 	// 측정 버튼은 토글이라 활성 상태를 눈으로 알려야 한다. UIButton 에는
 	// 체크 상태가 없으므로 스타일 두 벌을 갈아 끼운다.
@@ -143,6 +150,7 @@ private:
 
 	// LUT
 	std::shared_ptr<UIButton> m_lutButton = nullptr;
+	std::shared_ptr<UIButton> m_pixelGridButton = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_lutContextMenuButton = nullptr;
 	std::shared_ptr<UIContextMenuPanel> m_lutSubMenu = nullptr;
 	std::shared_ptr<UIContextMenuButton>

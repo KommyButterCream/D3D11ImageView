@@ -50,6 +50,9 @@
     <ClCompile Include="..\Overlay Renderer\OverlayRectangleRenderer.cpp">
       <Filter>Overlay Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="..\ROI Renderer\ROIAngleRenderer.cpp">
+      <Filter>ROI Renderer</Filter>
+    </ClCompile>
     <ClCompile Include="..\ROI Renderer\ROICircleRenderer.cpp">
       <Filter>ROI Renderer</Filter>
     </ClCompile>
@@ -119,6 +122,12 @@
     <ClCompile Include="..\Lut\LutTable.cpp">
       <Filter>LUT</Filter>
     </ClCompile>
+    <ClCompile Include="..\Render Layer\PixelGridRenderLayer.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Render Layer\ValueLabelAtlas.cpp">
+      <Filter>Render Layer</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -155,6 +164,9 @@
       <Filter>Overlay Renderer</Filter>
     </ClInclude>
     <ClInclude Include="..\ROI Renderer\IROIObject.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROIAngleRenderer.h">
       <Filter>ROI Renderer</Filter>
     </ClInclude>
     <ClInclude Include="..\ROI Renderer\ROICircleRenderer.h">
@@ -225,6 +237,12 @@
     </ClInclude>
     <ClInclude Include="..\Lut\LutTable.h">
       <Filter>LUT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\PixelGridRenderLayer.h">
+      <Filter>Render Layer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Render Layer\ValueLabelAtlas.h">
+      <Filter>Render Layer</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

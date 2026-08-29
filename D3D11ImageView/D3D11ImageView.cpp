@@ -964,3 +964,16 @@ bool D3D11ImageView::IsMeasureActive() const
 {
 	return m_impl ? m_impl->IsMeasureActive() : false;
 }
+
+void D3D11ImageView::ToggleMeasureAngle()
+{
+	if (m_impl)
+	{
+		m_impl->ToggleMeasureAngle();
+	}
+}
+
+bool D3D11ImageView::IsMeasureAngleActive() const
+{
+	return m_impl ? m_impl->IsMeasureAngleActive() : false;
+}

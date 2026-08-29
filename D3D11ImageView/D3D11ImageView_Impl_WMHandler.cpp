@@ -44,6 +44,7 @@ LRESULT D3D11ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_SETCURSOR:		return OnSetCursor(wParam, lParam);
 	case WM_SIZE:			return OnSize(wParam, lParam);
 	case WM_TIMER:			return OnTimer(wParam, lParam);
+	case WM_KEYDOWN:		return OnKeyDown(wParam, lParam);
 	case WM_D3IV_SAVE_IMAGE:	return OnSaveImageRequested(wParam, lParam);
 	}
 
@@ -78,6 +79,54 @@ LRESULT D3D11ImageView_Impl::OnDestroy(WPARAM wParam, LPARAM lParam)
 LRESULT D3D11ImageView_Impl::OnEraseBkgnd(WPARAM wParam, LPARAM lParam)
 {
 	return TRUE;
+}
+
+// 키보드 단축키.
+//
+// 컨텍스트 메뉴가 Ctrl +, Ctrl -, Ctrl 1 을 라벨로 광고하고 있었는데
+// 실제로는 WM_KEYDOWN 핸들러 자체가 없어서 눌러도 아무 일이 없었다.
+//
+// 포커스는 OnLButtonDown 에서 가져온다. 자식 창이라 클릭 전에는 호스트가
+// 키를 받는다.
+LRESULT D3D11ImageView_Impl::OnKeyDown(WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+
+	// GetKeyState 의 최상위 비트가 눌림이다.
+	const bool ctrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+
+	if (!ctrl)
+		return 0L;
+
+	switch (wParam)
+	{
+	// 메인 키보드의 '+' 는 Shift 없이 누르면 '=' 자리라 VK_OEM_PLUS 로 온다.
+	// 숫자패드는 VK_ADD 다. 둘 다 받는다.
+	case VK_OEM_PLUS:
+	case VK_ADD:
+		ZoomIn();
+		return 0L;
+
+	case VK_OEM_MINUS:
+	case VK_SUBTRACT:
+		ZoomOut();
+		return 0L;
+
+	case '1':
+	case VK_NUMPAD1:
+		Zoom1To1();
+		return 0L;
+
+	case '0':
+	case VK_NUMPAD0:
+		ZoomFit();
+		return 0L;
+
+	default:
+		break;
+	}
+
+	return 0L;
 }
 
 LRESULT D3D11ImageView_Impl::OnLButtonDblClk(WPARAM wParam, LPARAM lParam)
@@ -120,6 +169,15 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 {
 	// Client 좌표계
 
+	// 키보드 포커스를 가져온다.
+	//
+	// 이게 없으면 WM_KEYDOWN 이 호스트로 가고 뷰어의 단축키가 영영 안 먹는다.
+	// 자식 창 뷰어에서 이미지를 클릭하면 포커스가 오는 것이 일반적인 동작이다.
+	if (m_hWnd && ::GetFocus() != m_hWnd)
+	{
+		::SetFocus(m_hWnd);
+	}
+
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
 	UIEventResult uiEventResult = HandleMouseEventUI(UIMouseEventType::LButtonDown,	mousePosition.x, mousePosition.y);
@@ -154,6 +212,30 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 				if (m_uiLayer)
 				{
 					m_uiLayer->SetMeasureButtonActive(false);
+				}
+			}
+
+			InvalidateFrame();
+			return 0L;
+		}
+	}
+
+	// 각도 측정도 같은 방식이다. 다만 점을 셋 찍는다.
+	if (m_angleActive && m_roiLayer)
+	{
+		bool completed = false;
+		if (m_roiLayer->AngleOnClick(
+			static_cast<float>(mousePosition.x),
+			static_cast<float>(mousePosition.y), completed))
+		{
+			if (completed)
+			{
+				// 세 번째 점을 찍었다. 모드만 내리고 측정 결과는 남긴다.
+				m_angleActive = false;
+
+				if (m_uiLayer)
+				{
+					m_uiLayer->SetAngleButtonActive(false);
 				}
 			}
 
@@ -270,6 +352,20 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 	if (m_measureActive && m_roiLayer && m_roiLayer->IsMeasureRubber())
 	{
 		if (m_roiLayer->MeasureOnMouseMove(
+			static_cast<float>(mousePosition.x),
+			static_cast<float>(mousePosition.y)))
+		{
+			InvalidateFrame();
+		}
+
+		UpdateStatusbar(mousePosition.x, mousePosition.y);
+		return 0L;
+	}
+
+	// 각도 측정도 마찬가지다. 아직 안 찍은 점이 마우스를 따라간다.
+	if (m_angleActive && m_roiLayer && m_roiLayer->IsAngleRubber())
+	{
+		if (m_roiLayer->AngleOnMouseMove(
 			static_cast<float>(mousePosition.x),
 			static_cast<float>(mousePosition.y)))
 		{

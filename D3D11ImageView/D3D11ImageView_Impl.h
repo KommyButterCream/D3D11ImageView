@@ -65,6 +65,7 @@ class SelectionRectRenderLayer;
 class OverlayRenderLayer;
 class UIRenderLayer;
 class ImageCenterRenderLayer;
+class PixelGridRenderLayer;
 
 class Camera2D;
 class UIEventDispatcher;
@@ -322,7 +323,20 @@ public:
 	void ToggleMeasureDistance();
 	bool IsMeasureActive() const;
 
+	// 각도 측정 도구 토글. 점 세 개(첫 점 -> 꼭짓점 -> 둘째 점)를 찍는다.
+	//
+	// 거리 측정과 동시에 켜지지 않는다. 둘 다 좌클릭을 가로채므로 한쪽을
+	// 켜면 다른 쪽은 내려간다.
+	void ToggleMeasureAngle();
+	bool IsMeasureAngleActive() const;
+
 	// 표시용 LUT. Gray 이미지에만 적용된다.
+	// 고배율에서 픽셀 격자와 값을 표시한다.
+	void SetPixelGridEnabled(bool enable);
+	bool IsPixelGridEnabled() const;
+	void TogglePixelGrid();
+	bool IsPixelGridVisible() const;
+
 	bool IsLutSupported() const;
 	void SetLutEnabled(bool enable);
 	bool IsLutEnabled() const;
@@ -367,6 +381,7 @@ private:
 	LRESULT OnCreate(WPARAM wParam, LPARAM lParam);
 	LRESULT OnDestroy(WPARAM wParam, LPARAM lParam);
 	LRESULT OnEraseBkgnd(WPARAM wParam, LPARAM lParam);
+	LRESULT OnKeyDown(WPARAM wParam, LPARAM lParam);
 	LRESULT OnLButtonDblClk(WPARAM wParam, LPARAM lParam);
 	LRESULT OnLButtonDown(WPARAM wParam, LPARAM lParam);
 	LRESULT OnLButtonUp(WPARAM wParam, LPARAM lParam);
@@ -521,12 +536,16 @@ private:
 	// 거리 측정 모드. 활성 중에는 좌클릭이 ROI 편집 대신 측정으로 간다.
 	bool m_measureActive = false;
 
+	// 각도 측정 모드. 거리 측정과 배타적이다.
+	bool m_angleActive = false;
+
 	// WIC 기반 저장기. Initialize 는 실제로 저장할 때 처음 한 번만 한다
 	// (뷰어를 띄우기만 하고 저장을 안 쓰는 호스트가 대부분이다).
 	std::unique_ptr<D3D11ImageIO> m_imageIO = nullptr;
 
 	bool m_showImageCenterLineLayer = false;
 	std::unique_ptr<ImageCenterRenderLayer> m_imageCenterLineLayer = nullptr;
+	std::unique_ptr<PixelGridRenderLayer> m_pixelGridLayer = nullptr;
 
 	std::unique_ptr<UIRenderLayer> m_uiLayer = nullptr;
 

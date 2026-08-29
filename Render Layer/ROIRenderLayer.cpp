@@ -2,6 +2,7 @@
 #include "ROIRenderLayer.h"
 
 #include "../ROI Renderer/IROIObject.h"
+#include "../ROI Renderer/ROIAngleRenderer.h"
 #include "../ROI Renderer/ROICircleRenderer.h"
 #include "../ROI Renderer/ROIEllipseRenderer.h"
 #include "../ROI Renderer/ROILineRenderer.h"
@@ -168,16 +169,25 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 
 	for (const auto& roiObject : m_roiObjects)
 	{
-		const bool isLine = (roiObject->GetObjectType() == ROIObjectType::Line);
+		const ROIObjectType objectType = roiObject->GetObjectType();
 
-		// Line 은 이름 뒤에 측정 길이를 붙인다. 이름이 없으면 길이만 나온다.
-		// 그래서 이름이 비어도 라벨을 그린다 — 측정 도구가 만든 선이 그 경우다.
+		const bool isLine = (objectType == ROIObjectType::Line);
+		const bool isAngle = (objectType == ROIObjectType::Angle);
+
+		// Line 은 이름 뒤에 측정 길이를, Angle 은 각도를 붙인다. 이름이 없으면
+		// 값만 나온다. 그래서 이름이 비어도 라벨을 그린다 — 측정 도구가 만든
+		// 것이 그 경우다.
 		std::wstring label = roiObject->GetName();
 
 		if (isLine)
 		{
 			const std::wstring length = FormatLength(roiObject.get());
 			label = label.empty() ? length : (label + L"  " + length);
+		}
+		else if (isAngle)
+		{
+			const std::wstring degrees = FormatAngle(roiObject.get());
+			label = label.empty() ? degrees : (label + L"  " + degrees);
 		}
 
 		if (label.empty())
@@ -270,6 +280,67 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 
 			plateLeft = midScreen.left - plateWidth * 0.5f;
 			plateTop = midScreen.top - plateHeight - kGap;
+		}
+		else if (isAngle)
+		{
+			// 각도는 꼭짓점 근처에 붙어야 어느 각인지 읽힌다. 바운딩 박스
+			// 좌상단은 선과 마찬가지로 도형에서 떨어진 허공일 수 있다.
+			//
+			// 다만 꼭짓점 바로 위에 놓으면 각도 호를 덮는다. 두 변의
+			// 이등분선 방향으로 밀어 호 바깥, 각이 벌어진 쪽에 놓는다.
+			Point2f vertices[3] = {};
+			if (roiObject->GetVertices(vertices, 3, 0) == 3)
+			{
+				const Rect2f firstScreen = ToScreenBounds(
+					{ vertices[0].x, vertices[0].y, vertices[0].x, vertices[0].y });
+				const Rect2f vertexScreen = ToScreenBounds(
+					{ vertices[1].x, vertices[1].y, vertices[1].x, vertices[1].y });
+				const Rect2f secondScreen = ToScreenBounds(
+					{ vertices[2].x, vertices[2].y, vertices[2].x, vertices[2].y });
+
+				// 화면 좌표로 계산한다. 이미지 좌표로 하면 X/Y 배율이 다를 때
+				// 이등분선이 화면에서 이등분선으로 보이지 않는다.
+				float dirX = 0.0f;
+				float dirY = -1.0f;   // 변이 겹쳐 방향이 없으면 위쪽
+
+				const float arm1X = firstScreen.left - vertexScreen.left;
+				const float arm1Y = firstScreen.top - vertexScreen.top;
+				const float arm2X = secondScreen.left - vertexScreen.left;
+				const float arm2Y = secondScreen.top - vertexScreen.top;
+
+				const float len1 = sqrtf(arm1X * arm1X + arm1Y * arm1Y);
+				const float len2 = sqrtf(arm2X * arm2X + arm2Y * arm2Y);
+
+				if (len1 > 1e-3f && len2 > 1e-3f)
+				{
+					float bisectX = arm1X / len1 + arm2X / len2;
+					float bisectY = arm1Y / len1 + arm2Y / len2;
+
+					const float bisectLen = sqrtf(bisectX * bisectX + bisectY * bisectY);
+
+					if (bisectLen > 1e-3f)
+					{
+						dirX = bisectX / bisectLen;
+						dirY = bisectY / bisectLen;
+					}
+					else
+					{
+						// 두 변이 정확히 반대 방향(180도)이라 이등분선이 없다.
+						// 변에 수직인 쪽으로 뺀다.
+						dirX = -arm1Y / len1;
+						dirY = arm1X / len1;
+					}
+				}
+
+				// 호 반지름(22px)보다 밖으로.
+				constexpr float kAngleLabelOffset = 34.0f;
+
+				const float anchorX = vertexScreen.left + dirX * kAngleLabelOffset;
+				const float anchorY = vertexScreen.top + dirY * kAngleLabelOffset;
+
+				plateLeft = anchorX - plateWidth * 0.5f;
+				plateTop = anchorY - plateHeight * 0.5f;
+			}
 		}
 
 		// 위쪽 공간이 없으면 도형 안쪽 상단으로 뒤집는다.
@@ -466,6 +537,175 @@ bool ROIRenderLayer::MeasureOnMouseMove(float screenX, float screenY)
 		{
 			lineObject->SetEndPoint(imagePoint);
 			QueueEvent(ROIEvent::EditChanged, lineObject->GetKey());
+			changed = true;
+		}
+	}
+
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
+
+	return changed;
+}
+
+const wchar_t* ROIRenderLayer::AngleKey()
+{
+	// 거리 측정선과 키가 달라야 둘이 같이 남는다.
+	return L"__angle";
+}
+
+std::wstring ROIRenderLayer::FormatAngle(const IROIObject* roiObject) const
+{
+	// 호출자가 m_roiLock 을 쥐고 있다.
+	const auto* angleObject = static_cast<const ROIAngleRenderer*>(roiObject);
+
+	wchar_t buffer[64] = {};
+	swprintf_s(buffer, 64, L"%.2f°", angleObject->GetAngleDegrees());
+
+	return buffer;
+}
+
+void ROIRenderLayer::BeginAngle()
+{
+	// 버튼을 누를 때마다 기존 측정 결과를 지운다(켜든 끄든 리셋).
+	::AcquireSRWLockExclusive(&m_roiLock);
+	RemoveObjectByKey(AngleKey());
+	m_angleState = AngleState::Armed;
+	::ReleaseSRWLockExclusive(&m_roiLock);
+}
+
+void ROIRenderLayer::CancelAngle()
+{
+	::AcquireSRWLockExclusive(&m_roiLock);
+	RemoveObjectByKey(AngleKey());
+	m_angleState = AngleState::Off;
+	::ReleaseSRWLockExclusive(&m_roiLock);
+}
+
+bool ROIRenderLayer::IsAngleArmed() const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+	const bool armed = (m_angleState == AngleState::Armed);
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return armed;
+}
+
+bool ROIRenderLayer::IsAngleRubber() const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+	const bool rubber = (m_angleState == AngleState::RubberVertex
+		|| m_angleState == AngleState::RubberSecond);
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return rubber;
+}
+
+bool ROIRenderLayer::AngleOnClick(float screenX, float screenY, bool& outCompleted)
+{
+	outCompleted = false;
+
+	if (!m_camera)
+	{
+		return false;
+	}
+
+	const Point2f imagePoint = ScreenToImage(screenX, screenY);
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	bool consumed = false;
+
+	if (m_angleState == AngleState::Armed)
+	{
+		// 첫 점. 세 점이 전부 겹친 각을 만들고 고무줄 단계로 넘어간다.
+		RemoveObjectByKey(AngleKey());
+
+		auto angleObject = std::make_unique<ROIAngleRenderer>(AngleKey());
+		angleObject->UpdateDefinition(L"",
+			imagePoint, imagePoint, imagePoint,
+			RGB(255, 220, 0), true, true, 14);
+
+		IROIObject* raw = angleObject.get();
+		m_roiObjects.push_back(std::move(angleObject));
+
+		m_selectedObject = raw;
+		m_hoveredObject = raw;
+		m_angleState = AngleState::RubberVertex;
+
+		QueueEvent(ROIEvent::Selected, raw->GetKey());
+		QueueEvent(ROIEvent::EditBegin, raw->GetKey());
+
+		consumed = true;
+	}
+	else if (m_angleState == AngleState::RubberVertex)
+	{
+		// 두 번째 점이 꼭짓점이다. 여기서부터 둘째 변이 따라온다.
+		if (auto* angleObject = static_cast<ROIAngleRenderer*>(
+			FindObjectByKey(AngleKey(), ROIObjectType::Angle)))
+		{
+			angleObject->SetVertex(imagePoint);
+			angleObject->SetSecond(imagePoint);
+			QueueEvent(ROIEvent::EditChanged, angleObject->GetKey());
+		}
+
+		m_angleState = AngleState::RubberSecond;
+		consumed = true;
+	}
+	else if (m_angleState == AngleState::RubberSecond)
+	{
+		// 세 번째 점. 여기서 확정하고 모드를 내린다.
+		if (auto* angleObject = static_cast<ROIAngleRenderer*>(
+			FindObjectByKey(AngleKey(), ROIObjectType::Angle)))
+		{
+			angleObject->SetSecond(imagePoint);
+			QueueEvent(ROIEvent::EditEnd, angleObject->GetKey());
+		}
+
+		m_angleState = AngleState::Off;
+		outCompleted = true;
+		consumed = true;
+	}
+
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
+
+	return consumed;
+}
+
+bool ROIRenderLayer::AngleOnMouseMove(float screenX, float screenY)
+{
+	if (!m_camera)
+	{
+		return false;
+	}
+
+	const Point2f imagePoint = ScreenToImage(screenX, screenY);
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	bool changed = false;
+
+	if (m_angleState == AngleState::RubberVertex
+		|| m_angleState == AngleState::RubberSecond)
+	{
+		if (auto* angleObject = static_cast<ROIAngleRenderer*>(
+			FindObjectByKey(AngleKey(), ROIObjectType::Angle)))
+		{
+			if (m_angleState == AngleState::RubberVertex)
+			{
+				// 아직 꼭짓점을 못 정했다. 둘째 점도 같이 끌고 다녀야
+				// 변이 하나로 보인다.
+				angleObject->SetVertex(imagePoint);
+				angleObject->SetSecond(imagePoint);
+			}
+			else
+			{
+				angleObject->SetSecond(imagePoint);
+			}
+
+			QueueEvent(ROIEvent::EditChanged, angleObject->GetKey());
 			changed = true;
 		}
 	}

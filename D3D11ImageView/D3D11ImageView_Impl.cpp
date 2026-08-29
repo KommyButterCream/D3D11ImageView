@@ -25,6 +25,7 @@
 #include "../Render Layer/SelectionRectRenderLayer.h"
 #include "../Render Layer/OverlayRenderLayer.h"
 #include "../Render Layer/ImageCenterRenderLayer.h"
+#include "../Render Layer/PixelGridRenderLayer.h"
 #include "../Render Layer/ROIRenderLayer.h"
 #include "../Render Layer/UIRenderLayer.h"
 
@@ -190,6 +191,19 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 
 	m_layers.push_back(m_imageCenterLineLayer.get());
 
+	// 픽셀 격자.
+	//
+	// ROI 와 오버레이 위에 그린다. 격자는 이미지를 읽기 위한 보조선이라
+	// ROI 에 가려지면 쓸모가 없다.
+	m_pixelGridLayer = std::make_unique<PixelGridRenderLayer>();
+	m_pixelGridLayer->SetCamera2D(m_camera.get());
+	m_pixelGridLayer->SetImageLayer(m_imageLayer.get());
+
+	if (!m_pixelGridLayer->Initialize(m_renderContext.get()))
+		return failInitialize();
+
+	m_layers.push_back(m_pixelGridLayer.get());
+
 	// UI Event Dispatch
 	m_uiEventDispatcher = std::make_unique<UIEventDispatcher>();
 	m_uiEventDispatcher->RegisterCallback(&D3D11ImageView_Impl::OnUICommand, this);
@@ -267,6 +281,7 @@ void D3D11ImageView_Impl::Finalize()
 	m_selectionRectLayer.reset();
 	m_imageLayer.reset();
 	m_imageCenterLineLayer.reset();
+	m_pixelGridLayer.reset();
 	m_uiLayer.reset();
 
 	m_layers.clear();
@@ -358,6 +373,12 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 
 	m_uiLayer->Prepare();
 
+	// 픽셀 격자는 이번 프레임에 보이는 값들의 비트맵을 여기서 만든다.
+	//
+	// 프레임의 BeginDraw 안에서 오프스크린 타깃에 그리면 D2D 가 순서를
+	// 보장하지 않아 비트맵이 비어 버린다. 그래서 Render 가 아니라 Prepare 다.
+	m_pixelGridLayer->Prepare();
+
 	if (isCameraAnimating || isUiAnimating || m_isDirty != FALSE)
 	{
 		::InterlockedExchange(&m_isDirty, FALSE);
@@ -388,6 +409,12 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 		}
 
 		m_roiLayer->Render();
+
+		// 픽셀 격자는 ROI 위, UI 아래.
+		//
+		// 격자는 이미지를 읽기 위한 보조선이라 ROI 에 가리면 쓸모가 없고,
+		// 툴바/상태바 위로 넘어가서도 안 된다.
+		m_pixelGridLayer->Render();
 
 		m_uiLayer->Render();
 
@@ -457,6 +484,10 @@ void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 		ToggleMeasureDistance();
 		break;
 
+	case UICommand::MeasureAngle:
+		ToggleMeasureAngle();
+		break;
+
 	// 여기서 바로 대화상자를 열면 안 된다. 지금은 마우스 처리 도중이고,
 	// 모달 대화상자가 자기 메시지 루프를 돌리면 그 안으로 다시 들어온다.
 	// 요청만 큐에 넣고 마우스 처리가 끝난 뒤에 연다.
@@ -468,6 +499,10 @@ void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 		break;
 	case UICommand::SaveImageBmp:
 		PostSaveImageRequest(SaveImageFormat::Bmp);
+		break;
+
+	case UICommand::TogglePixelGrid:
+		TogglePixelGrid();
 		break;
 
 	case UICommand::ToggleLut:
@@ -495,6 +530,40 @@ void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 	default:
 		break;
 	}
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 픽셀 격자
+// ────────────────────────────────────────────────────────────────────
+
+void D3D11ImageView_Impl::SetPixelGridEnabled(bool enable)
+{
+	if (!m_pixelGridLayer)
+		return;
+
+	m_pixelGridLayer->SetEnabled(enable);
+
+	if (m_uiLayer)
+	{
+		m_uiLayer->SetPixelGridButtonActive(enable);
+	}
+
+	InvalidateFrame();
+}
+
+bool D3D11ImageView_Impl::IsPixelGridEnabled() const
+{
+	return m_pixelGridLayer ? m_pixelGridLayer->IsEnabled() : false;
+}
+
+void D3D11ImageView_Impl::TogglePixelGrid()
+{
+	SetPixelGridEnabled(!IsPixelGridEnabled());
+}
+
+bool D3D11ImageView_Impl::IsPixelGridVisible() const
+{
+	return m_pixelGridLayer ? m_pixelGridLayer->IsVisibleNow() : false;
 }
 
 // ────────────────────────────────────────────────────────────────────

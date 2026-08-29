@@ -103,6 +103,19 @@ void D3D11ImageView_Impl::ToggleMeasureDistance()
 	if (m_measureActive)
 	{
 		m_roiLayer->BeginMeasure();
+
+		// 각도 측정과 배타적이다. 둘 다 좌클릭을 가로채므로 같이 켜지면
+		// 어느 쪽이 먹는지 알 수 없다.
+		if (m_angleActive)
+		{
+			m_angleActive = false;
+			m_roiLayer->CancelAngle();
+
+			if (m_uiLayer)
+			{
+				m_uiLayer->SetAngleButtonActive(false);
+			}
+		}
 	}
 	else
 	{
@@ -120,6 +133,49 @@ void D3D11ImageView_Impl::ToggleMeasureDistance()
 bool D3D11ImageView_Impl::IsMeasureActive() const
 {
 	return m_measureActive;
+}
+
+void D3D11ImageView_Impl::ToggleMeasureAngle()
+{
+	if (!m_roiLayer)
+	{
+		return;
+	}
+
+	// 토글이다. 어느 쪽으로 가든 기존 측정 결과는 리셋된다.
+	m_angleActive = !m_angleActive;
+
+	if (m_angleActive)
+	{
+		m_roiLayer->BeginAngle();
+
+		if (m_measureActive)
+		{
+			m_measureActive = false;
+			m_roiLayer->CancelMeasure();
+
+			if (m_uiLayer)
+			{
+				m_uiLayer->SetMeasureButtonActive(false);
+			}
+		}
+	}
+	else
+	{
+		m_roiLayer->CancelAngle();
+	}
+
+	if (m_uiLayer)
+	{
+		m_uiLayer->SetAngleButtonActive(m_angleActive);
+	}
+
+	InvalidateFrame();
+}
+
+bool D3D11ImageView_Impl::IsMeasureAngleActive() const
+{
+	return m_angleActive;
 }
 
 void D3D11ImageView_Impl::SetROIEventHandler(ROIRenderLayer::ROIEventHandler handler, void* userData)

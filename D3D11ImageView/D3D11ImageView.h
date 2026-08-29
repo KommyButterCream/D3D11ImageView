@@ -354,6 +354,13 @@ public:
 	void ToggleMeasureDistance();
 	bool IsMeasureActive() const;
 
+	// 각도 측정 도구 토글. 활성 상태에서 세 번 클릭한다 —
+	// 첫 점, 꼭짓점, 둘째 점 순서다. 결과는 0~180도의 사잇각이다.
+	//
+	// 거리 측정과 동시에 켜지지 않는다. 한쪽을 켜면 다른 쪽은 내려간다.
+	void ToggleMeasureAngle();
+	bool IsMeasureAngleActive() const;
+
 	// 붙어 있는 원본 이미지를 파일로 저장한다.
 	//
 	// 화면 캡처가 아니다. 줌 배율, 팬 위치, ROI, 오버레이는 결과에 들어가지

@@ -177,6 +177,7 @@ void UIRenderLayer::RebindFontManager(FontManager* fontManager)
 
 	// 툴바 — 측정 버튼만 텍스트를 쓴다.
 	if (m_measureButton) m_measureButton->SetFontManager(fontManager);
+	if (m_angleButton)   m_angleButton->SetFontManager(fontManager);
 	if (m_lutButton)     m_lutButton->SetFontManager(fontManager);
 
 	// LUT 하위 메뉴. 패널의 자식이 아니라 따로 챙겨야 한다.
@@ -395,6 +396,26 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_toolbarPanel->AddChild(m_measureButton);
 	}
 
+	// 각도 측정 (토글)
+	//
+	// 거리 측정 바로 뒤에 둔다. 둘 다 "재는" 도구라 같이 붙어 있어야
+	// 찾기 쉽다.
+	{
+		m_angleButton = std::make_shared<UIButton>();
+
+		m_angleButton->SetStyle(m_buttonNormalStyle);
+		m_angleButton->SetLayout({ 0.f, 0.f, buttonSize, buttonSize });
+		m_angleButton->SetRounded(true);
+		m_angleButton->SetCornerRadius(4.f);
+		m_angleButton->SetCommand(UICommand::MeasureAngle);
+		m_angleButton->SetEventDispatcher(m_uiEventDispatcher);
+
+		m_angleButton->SetIconShape(UIIconShape::MeasureAngle);
+		m_angleButton->SetIconStyle(buttonIconDefaultStyle);
+
+		m_toolbarPanel->AddChild(m_angleButton);
+	}
+
 	// LUT (토글)
 	//
 	// 켜고 끄기만 한다. 어느 테이블을 쓸지는 컨텍스트 메뉴의 LUT 하위
@@ -414,6 +435,23 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_lutButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_lutButton);
+	}
+
+	// 픽셀 격자 (토글)
+	{
+		m_pixelGridButton = std::make_shared<UIButton>();
+
+		m_pixelGridButton->SetStyle(m_buttonNormalStyle);
+		m_pixelGridButton->SetLayout({ 0.f, 0.f, buttonSize, buttonSize });
+		m_pixelGridButton->SetRounded(true);
+		m_pixelGridButton->SetCornerRadius(4.f);
+		m_pixelGridButton->SetCommand(UICommand::TogglePixelGrid);
+		m_pixelGridButton->SetEventDispatcher(m_uiEventDispatcher);
+
+		m_pixelGridButton->SetIconShape(UIIconShape::PixelGrid);
+		m_pixelGridButton->SetIconStyle(buttonIconDefaultStyle);
+
+		m_toolbarPanel->AddChild(m_pixelGridButton);
 	}
 
 	// Toolbar Initialize
@@ -587,7 +625,7 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_zoomFitContextMenuButton->SetIconShape(UIIconShape::ZoomFit);
 		m_zoomFitContextMenuButton->SetIconStyle(contextMenuButtonIconDefaultStyle);
 		m_zoomFitContextMenuButton->SetText(L"Zoom Fit");
-		m_zoomFitContextMenuButton->SetExtraText(L"");
+		m_zoomFitContextMenuButton->SetExtraText(L"Ctrl 0");
 		m_zoomFitContextMenuButton->SetTextStyle(contextMenuButtonTextDefaultStyle);
 
 		m_contextMenuPanel->AddChild(m_zoomFitContextMenuButton);
@@ -1185,6 +1223,17 @@ void UIRenderLayer::SetMeasureButtonActive(bool active)
 	m_measureButton->SetIconStyle(active ? m_iconActiveStyle : m_iconNormalStyle);
 }
 
+void UIRenderLayer::SetAngleButtonActive(bool active)
+{
+	if (!m_angleButton)
+	{
+		return;
+	}
+
+	m_angleButton->SetStyle(active ? m_buttonActiveStyle : m_buttonNormalStyle);
+	m_angleButton->SetIconStyle(active ? m_iconActiveStyle : m_iconNormalStyle);
+}
+
 void UIRenderLayer::SetLutButtonActive(bool active)
 {
 	if (!m_lutButton)
@@ -1194,6 +1243,17 @@ void UIRenderLayer::SetLutButtonActive(bool active)
 
 	m_lutButton->SetStyle(active ? m_buttonActiveStyle : m_buttonNormalStyle);
 	m_lutButton->SetIconStyle(active ? m_iconActiveStyle : m_iconNormalStyle);
+}
+
+void UIRenderLayer::SetPixelGridButtonActive(bool active)
+{
+	if (!m_pixelGridButton)
+	{
+		return;
+	}
+
+	m_pixelGridButton->SetStyle(active ? m_buttonActiveStyle : m_buttonNormalStyle);
+	m_pixelGridButton->SetIconStyle(active ? m_iconActiveStyle : m_iconNormalStyle);
 }
 
 void UIRenderLayer::SetLutAvailable(bool available)

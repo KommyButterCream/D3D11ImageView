@@ -16,7 +16,13 @@ enum class ROIObjectType : uint8_t
 	Ellipse,
 	Circle,
 	Polygon,
-	Line
+	Line,
+
+	// 세 점이 이루는 각. 가운데가 꼭짓점이다.
+	//
+	// 뒤에 붙인다. 앞에 끼우면 기존 값이 밀려 호스트가 저장해 둔 타입 번호가
+	// 뜻이 달라진다.
+	Angle
 };
 
 enum class ROIHitType : uint8_t
@@ -62,6 +68,13 @@ struct ROIShapeData
 		struct { float cx, cy, rx, ry, angleRad; } ellipse;
 		struct { float cx, cy, radius; }           circle;
 		struct { float x1, y1, x2, y2; }     line;
+
+		// 꼭짓점(vx, vy)에서 (x1, y1)과 (x2, y2)로 뻗는 두 변.
+		//
+		// ★ 이 멤버가 union 을 20바이트에서 24바이트로 넓힌다. 구조체 전체는
+		//    28 -> 32바이트다. 헤더를 다시 컴파일하지 않고 예전 DLL 에 링크된
+		//    호출자가 있으면 어긋난다.
+		struct { float x1, y1, vx, vy, x2, y2; } angle;
 	} u = {};
 };
 

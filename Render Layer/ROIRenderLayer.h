@@ -83,6 +83,27 @@ public:
 	// 고무줄 단계에서 끝점을 마우스 위치로 옮긴다. 화면 갱신이 필요하면 true.
 	bool MeasureOnMouseMove(float screenX, float screenY);
 
+	// ── 각도 측정 도구
+	//
+	// 거리 측정과 같은 방식인데 점을 셋 찍는다. 첫 점 -> 꼭짓점 -> 둘째 점
+	// 순서다(ImageJ 의 각도 도구와 같다). 확정되면 평범한 ROI 로 남아 세 점을
+	// 각각 드래그할 수 있다.
+	//
+	// 측정 결과는 한 번에 하나이고 키는 AngleKey() 다. 거리 측정선과는 키가
+	// 달라서 둘이 화면에 같이 남을 수 있다.
+	static const wchar_t* AngleKey();
+
+	void BeginAngle();                                    // 활성화 + 리셋
+	void CancelAngle();                                   // 해제 + 리셋
+	bool IsAngleArmed() const;                            // 첫 점을 기다리는 중
+	bool IsAngleRubber() const;                           // 점이 마우스를 따라오는 중
+
+	// 각도 모드에서의 클릭. true 면 소비했다는 뜻이고, 세 번째 클릭이었다면
+	// outCompleted 가 true 로 돌아온다(호출자가 모드를 내려야 한다).
+	bool AngleOnClick(float screenX, float screenY, bool& outCompleted);
+
+	bool AngleOnMouseMove(float screenX, float screenY);
+
 	// ── 조회
 	//
 	// 전부 m_roiLock 을 shared 로 잡고 값을 복사해 나간다. 호출자에게
@@ -252,8 +273,26 @@ private:
 	};
 	MeasureState m_measureState = MeasureState::Off;
 
+	// 각도 측정 상태. 점을 셋 찍으므로 고무줄 단계가 둘이다.
+	enum class AngleState : uint8_t
+	{
+		Off = 0,
+		Armed,          // 활성화됨. 첫 점을 기다린다.
+		RubberVertex,   // 첫 점을 찍었다. 꼭짓점이 마우스를 따라간다.
+		RubberSecond    // 꼭짓점을 찍었다. 둘째 점이 마우스를 따라간다.
+	};
+	AngleState m_angleState = AngleState::Off;
+
 	// Line ROI 의 길이를 표시용 문자열로 만든다. 스케일과 단위를 적용한다.
 	std::wstring FormatLength(const IROIObject* roiObject) const;
+
+	// Angle ROI 의 각도를 표시용 문자열로 만든다.
+	//
+	// 픽셀 스케일을 쓰지 않는다. 각도는 길이와 달리 X/Y 배율이 다르면
+	// 화면상의 각과 실제 각이 어긋나는데, 그 보정은 두 변 벡터에 스케일을
+	// 먹여야 나온다. 라인스캔 카메라를 실제로 붙여 보기 전에는 맞는지
+	// 확인할 방법이 없어서 지금은 픽셀 기준 각을 그대로 낸다.
+	std::wstring FormatAngle(const IROIObject* roiObject) const;
 };
 
 

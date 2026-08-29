@@ -29,9 +29,12 @@
     <ClCompile Include="..\Render Layer\ImageCenterRenderLayer.cpp" />
     <ClCompile Include="..\Render Layer\ImageRenderLayer.cpp" />
     <ClCompile Include="..\Render Layer\OverlayRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\PixelGridRenderLayer.cpp" />
+    <ClCompile Include="..\Render Layer\ValueLabelAtlas.cpp" />
     <ClCompile Include="..\Render Layer\ROIRenderLayer.cpp" />
     <ClCompile Include="..\Render Layer\SelectionRectRenderLayer.cpp" />
     <ClCompile Include="..\Render Layer\UIRenderLayer.cpp" />
+    <ClCompile Include="..\ROI Renderer\ROIAngleRenderer.cpp" />
     <ClCompile Include="..\ROI Renderer\ROICircleRenderer.cpp" />
     <ClCompile Include="..\ROI Renderer\ROIEllipseRenderer.cpp" />
     <ClCompile Include="..\ROI Renderer\ROILineRenderer.cpp" />
@@ -74,10 +77,13 @@
     <ClInclude Include="..\Render Layer\ImageCenterRenderLayer.h" />
     <ClInclude Include="..\Render Layer\ImageRenderLayer.h" />
     <ClInclude Include="..\Render Layer\OverlayRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\PixelGridRenderLayer.h" />
+    <ClInclude Include="..\Render Layer\ValueLabelAtlas.h" />
     <ClInclude Include="..\Render Layer\ROIRenderLayer.h" />
     <ClInclude Include="..\Render Layer\SelectionRectRenderLayer.h" />
     <ClInclude Include="..\Render Layer\UIRenderLayer.h" />
     <ClInclude Include="..\ROI Renderer\IROIObject.h" />
+    <ClInclude Include="..\ROI Renderer\ROIAngleRenderer.h" />
     <ClInclude Include="..\ROI Renderer\ROICircleRenderer.h" />
     <ClInclude Include="..\ROI Renderer\ROIEllipseRenderer.h" />
     <ClInclude Include="..\ROI Renderer\ROILineRenderer.h" />
