@@ -81,6 +81,47 @@ bool D3D11ImageView_Impl::ROIRemove(const wchar_t* key)
 	return removed;
 }
 
+void D3D11ImageView_Impl::SetPixelScale(double xScale, double yScale, const wchar_t* unit)
+{
+	if (m_roiLayer)
+	{
+		m_roiLayer->SetPixelScale(xScale, yScale, unit);
+		InvalidateFrame();
+	}
+}
+
+void D3D11ImageView_Impl::ToggleMeasureDistance()
+{
+	if (!m_roiLayer)
+	{
+		return;
+	}
+
+	// 토글이다. 어느 쪽으로 가든 기존 측정선은 리셋된다.
+	m_measureActive = !m_measureActive;
+
+	if (m_measureActive)
+	{
+		m_roiLayer->BeginMeasure();
+	}
+	else
+	{
+		m_roiLayer->CancelMeasure();
+	}
+
+	if (m_uiLayer)
+	{
+		m_uiLayer->SetMeasureButtonActive(m_measureActive);
+	}
+
+	InvalidateFrame();
+}
+
+bool D3D11ImageView_Impl::IsMeasureActive() const
+{
+	return m_measureActive;
+}
+
 void D3D11ImageView_Impl::SetROIEventHandler(ROIRenderLayer::ROIEventHandler handler, void* userData)
 {
 	// Initialize 전에도 등록할 수 있어야 한다. C# 래퍼처럼 생성 직후

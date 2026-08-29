@@ -6,6 +6,9 @@
 #include "../../../Module/D3D11EngineInterface/IUIRenderLayer.h"
 #include "../../../Module/Core/ImageType/ImageBase.h"
 
+// UIStyle 을 값으로 들고 있으므로 전방선언으로는 부족하다.
+#include "../../../Module/D3D11UIFramework/D3D11UIFramework/Base/UIElementBase.h"
+
 #include <memory>
 
 class Camera2D;
@@ -56,12 +59,15 @@ public:
 	void SetToolbarVisible(bool visible);
 	void SetStatusBarVisible(bool visible);
 
+	// 거리 측정 버튼의 활성 표시를 켜고 끈다.
+	void SetMeasureButtonActive(bool active);
+
 private:
 	void RebindFontManager(FontManager* fontManager);
 	bool AcquireDeviceResources();
 	void ReleaseDeviceResources();
 
-	bool InitializeLeftToolbar(IRenderContext* context, float toolbarWidth);
+	bool InitializeLeftToolbar(IRenderContext* context, float toolbarWidth, FontManager* fontManager);
 	bool InitializeContextMenu(IRenderContext* context, FontManager* fontManager);
 	bool InitializeStatusbar(IRenderContext* context, float toolbarWidth, FontManager* fontManager);
 
@@ -93,6 +99,12 @@ private:
 	std::shared_ptr<UIButton> m_zoomOutButton = nullptr;
 	std::shared_ptr<UIButton> m_zoom1To1Button = nullptr;
 	std::shared_ptr<UIButton> m_zoomFitButton = nullptr;
+	std::shared_ptr<UIButton> m_measureButton = nullptr;
+
+	// 측정 버튼은 토글이라 활성 상태를 눈으로 알려야 한다. UIButton 에는
+	// 체크 상태가 없으므로 스타일 두 벌을 갈아 끼운다.
+	UIStyle m_buttonNormalStyle = {};
+	UIStyle m_buttonActiveStyle = {};
 
 	std::unique_ptr<UIContextMenuPanel> m_contextMenuPanel = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_zoomInContextMenuButton = nullptr;

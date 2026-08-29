@@ -80,3 +80,20 @@ void D3D11ImageView_Impl::ROIClear()
 	InvalidateFrame();
 }
 
+
+bool D3D11ImageView_Impl::ROISet(const wchar_t* key, const wchar_t* name, const Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
+{
+	if (!m_roiLayer)
+	{
+		return false;
+	}
+
+	const bool result = m_roiLayer->ROISet(key, name, line, rgb, isMovable, isResizable, fontSize);
+
+	if (result)
+	{
+		InvalidateFrame();
+	}
+
+	return result;
+}

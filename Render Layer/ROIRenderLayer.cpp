@@ -4,6 +4,7 @@
 #include "../ROI Renderer/IROIObject.h"
 #include "../ROI Renderer/ROICircleRenderer.h"
 #include "../ROI Renderer/ROIEllipseRenderer.h"
+#include "../ROI Renderer/ROILineRenderer.h"
 #include "../ROI Renderer/ROIRenderContext.h"
 #include "../ROI Renderer/ROIPolygonRenderer.h"
 #include "../ROI Renderer/ROIRectangleRenderer.h"
@@ -167,8 +168,19 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 
 	for (const auto& roiObject : m_roiObjects)
 	{
-		const std::wstring& name = roiObject->GetName();
-		if (name.empty())
+		const bool isLine = (roiObject->GetObjectType() == ROIObjectType::Line);
+
+		// Line 은 이름 뒤에 측정 길이를 붙인다. 이름이 없으면 길이만 나온다.
+		// 그래서 이름이 비어도 라벨을 그린다 — 측정 도구가 만든 선이 그 경우다.
+		std::wstring label = roiObject->GetName();
+
+		if (isLine)
+		{
+			const std::wstring length = FormatLength(roiObject.get());
+			label = label.empty() ? length : (label + L"  " + length);
+		}
+
+		if (label.empty())
 		{
 			// 이름이 비면 라벨을 그리지 않는다. 호스트가 ROISet 에 L"" 를
 			// 넘겨 끄는 방법이라, 이를 위한 별도 API 를 두지 않는다.
@@ -188,7 +200,7 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 		// 캐시 조회. 이름이나 글자 크기가 바뀌면 다시 만든다.
 		LabelCache& cache = m_labelCache[roiObject.get()];
 
-		if (!cache.layout || cache.name != name || cache.fontSize != rawFontSize)
+		if (!cache.layout || cache.name != label || cache.fontSize != rawFontSize)
 		{
 			SafeRelease(cache.layout);
 			cache.width = 0.0f;
@@ -203,7 +215,7 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 
 			IDWriteTextLayout* textLayout = nullptr;
 			const HRESULT hr = dwriteFactory->CreateTextLayout(
-				name.c_str(), static_cast<UINT32>(name.size()),
+				label.c_str(), static_cast<UINT32>(label.size()),
 				textFormat, FLT_MAX, FLT_MAX, &textLayout);
 
 			if (FAILED(hr) || !textLayout)
@@ -225,7 +237,7 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 			}
 
 			cache.layout = textLayout;
-			cache.name = name;
+			cache.name = label;
 			cache.fontSize = rawFontSize;
 			cache.width = metrics.width;
 			cache.height = metrics.height;
@@ -241,6 +253,24 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 		// 기본은 도형 바깥 위쪽. 도형을 가리지 않는다.
 		float plateLeft = screenBounds.left;
 		float plateTop = screenBounds.top - plateHeight - kGap;
+
+		if (isLine)
+		{
+			// 선은 바운딩 박스 좌상단이 도형과 동떨어진다(대각선이면 허공이다).
+			// 길이 라벨은 선 위에 있어야 읽히므로 중점을 기준으로 놓는다.
+			ROIShapeData shape = {};
+			roiObject->GetShape(shape);
+
+			const Point2f midImage = {
+				(shape.u.line.x1 + shape.u.line.x2) * 0.5f,
+				(shape.u.line.y1 + shape.u.line.y2) * 0.5f
+			};
+
+			const Rect2f midScreen = ToScreenBounds({ midImage.x, midImage.y, midImage.x, midImage.y });
+
+			plateLeft = midScreen.left - plateWidth * 0.5f;
+			plateTop = midScreen.top - plateHeight - kGap;
+		}
 
 		// 위쪽 공간이 없으면 도형 안쪽 상단으로 뒤집는다.
 		// 도형이 뷰 상단에 걸쳐 있을 때 라벨이 잘리는 흔한 경우를 덮는다.
@@ -279,6 +309,172 @@ void ROIRenderLayer::RenderNameLabels(const Rect2f& visibleRect)
 			m_strokeBrush,
 			D2D1_DRAW_TEXT_OPTIONS_NONE);
 	}
+}
+
+const wchar_t* ROIRenderLayer::MeasureKey()
+{
+	// 밑줄 두 개로 시작해 호스트 키와 부딪히지 않게 한다.
+	return L"__measure";
+}
+
+void ROIRenderLayer::SetPixelScale(double xScale, double yScale, const wchar_t* unit)
+{
+	if (xScale <= 0.0 || yScale <= 0.0)
+	{
+		return;
+	}
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	m_pixelScaleX = xScale;
+	m_pixelScaleY = yScale;
+	m_pixelUnit = unit ? unit : L"";
+
+	// 길이 라벨 문자열이 바뀌므로 캐시를 통째로 버린다.
+	ReleaseLabelCache();
+
+	::ReleaseSRWLockExclusive(&m_roiLock);
+}
+
+std::wstring ROIRenderLayer::FormatLength(const IROIObject* roiObject) const
+{
+	// 호출자가 m_roiLock 을 쥐고 있다.
+	ROIShapeData shape = {};
+	roiObject->GetShape(shape);
+
+	const double dx = (static_cast<double>(shape.u.line.x2) - shape.u.line.x1) * m_pixelScaleX;
+	const double dy = (static_cast<double>(shape.u.line.y2) - shape.u.line.y1) * m_pixelScaleY;
+	const double length = sqrt(dx * dx + dy * dy);
+
+	wchar_t buffer[64] = {};
+	swprintf_s(buffer, 64, L"%.2f %s", length, m_pixelUnit.c_str());
+
+	return buffer;
+}
+
+void ROIRenderLayer::BeginMeasure()
+{
+	// 버튼을 누를 때마다 기존 측정선을 지운다(켜든 끄든 리셋).
+	::AcquireSRWLockExclusive(&m_roiLock);
+	RemoveObjectByKey(MeasureKey());
+	m_measureState = MeasureState::Armed;
+	::ReleaseSRWLockExclusive(&m_roiLock);
+}
+
+void ROIRenderLayer::CancelMeasure()
+{
+	::AcquireSRWLockExclusive(&m_roiLock);
+	RemoveObjectByKey(MeasureKey());
+	m_measureState = MeasureState::Off;
+	::ReleaseSRWLockExclusive(&m_roiLock);
+}
+
+bool ROIRenderLayer::IsMeasureArmed() const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+	const bool armed = (m_measureState == MeasureState::Armed);
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return armed;
+}
+
+bool ROIRenderLayer::IsMeasureRubber() const
+{
+	::AcquireSRWLockShared(&m_roiLock);
+	const bool rubber = (m_measureState == MeasureState::Rubber);
+	::ReleaseSRWLockShared(&m_roiLock);
+
+	return rubber;
+}
+
+bool ROIRenderLayer::MeasureOnClick(float screenX, float screenY, bool& outCompleted)
+{
+	outCompleted = false;
+
+	if (!m_camera)
+	{
+		return false;
+	}
+
+	const Point2f imagePoint = ScreenToImage(screenX, screenY);
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	bool consumed = false;
+
+	if (m_measureState == MeasureState::Armed)
+	{
+		// 첫 점. 두 끝점이 겹친 선을 만들고 고무줄 단계로 넘어간다.
+		RemoveObjectByKey(MeasureKey());
+
+		auto lineObject = std::make_unique<ROILineRenderer>(MeasureKey());
+		lineObject->UpdateDefinition(L"",
+			Line2f(imagePoint.x, imagePoint.y, imagePoint.x, imagePoint.y),
+			RGB(255, 220, 0), true, true, 14);
+
+		IROIObject* raw = lineObject.get();
+		m_roiObjects.push_back(std::move(lineObject));
+
+		m_selectedObject = raw;
+		m_hoveredObject = raw;
+		m_measureState = MeasureState::Rubber;
+
+		QueueEvent(ROIEvent::Selected, raw->GetKey());
+		QueueEvent(ROIEvent::EditBegin, raw->GetKey());
+
+		consumed = true;
+	}
+	else if (m_measureState == MeasureState::Rubber)
+	{
+		// 두 번째 점. 여기서 확정하고 모드를 내린다.
+		if (auto* lineObject = static_cast<ROILineRenderer*>(
+			FindObjectByKey(MeasureKey(), ROIObjectType::Line)))
+		{
+			lineObject->SetEndPoint(imagePoint);
+			QueueEvent(ROIEvent::EditEnd, lineObject->GetKey());
+		}
+
+		m_measureState = MeasureState::Off;
+		outCompleted = true;
+		consumed = true;
+	}
+
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
+
+	return consumed;
+}
+
+bool ROIRenderLayer::MeasureOnMouseMove(float screenX, float screenY)
+{
+	if (!m_camera)
+	{
+		return false;
+	}
+
+	const Point2f imagePoint = ScreenToImage(screenX, screenY);
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	bool changed = false;
+
+	if (m_measureState == MeasureState::Rubber)
+	{
+		if (auto* lineObject = static_cast<ROILineRenderer*>(
+			FindObjectByKey(MeasureKey(), ROIObjectType::Line)))
+		{
+			lineObject->SetEndPoint(imagePoint);
+			QueueEvent(ROIEvent::EditChanged, lineObject->GetKey());
+			changed = true;
+		}
+	}
+
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	DispatchPendingEvents();
+
+	return changed;
 }
 
 void ROIRenderLayer::InvalidateLabelCache(const IROIObject* roiObject)
@@ -424,6 +620,31 @@ bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Polyg
 	}
 
 	const bool result = polygonObject->UpdateDefinition(name, polygon, rgb, isMovable, isResizable, fontSize);
+	::ReleaseSRWLockExclusive(&m_roiLock);
+
+	return result;
+}
+
+bool ROIRenderLayer::ROISet(const wchar_t* key, const wchar_t* name, const Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
+{
+	if (!key || key[0] == L'\0')
+	{
+		return false;
+	}
+
+	::AcquireSRWLockExclusive(&m_roiLock);
+
+	ROILineRenderer* lineObject = static_cast<ROILineRenderer*>(FindObjectByKey(key, ROIObjectType::Line));
+
+	if (!lineObject)
+	{
+		RemoveObjectByKey(key);
+		auto newLineObject = std::make_unique<ROILineRenderer>(key);
+		lineObject = newLineObject.get();
+		m_roiObjects.push_back(std::move(newLineObject));
+	}
+
+	const bool result = lineObject->UpdateDefinition(name, line, rgb, isMovable, isResizable, fontSize);
 	::ReleaseSRWLockExclusive(&m_roiLock);
 
 	return result;

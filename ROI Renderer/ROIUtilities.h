@@ -29,6 +29,34 @@ namespace ROIUtilities
 		return sqrtf(deltaX * deltaX + deltaY * deltaY);
 	}
 
+	// 점에서 선분까지의 최단 거리.
+	//
+	// 무한 직선이 아니라 선분이므로, 수선의 발이 선분 밖으로 나가면 가까운
+	// 끝점까지의 거리가 답이다. t 를 [0,1] 로 자르는 것이 그 처리다.
+	inline float DistanceToSegment(const Core::ShapeType::Point2f& point,
+		const Core::ShapeType::Point2f& start, const Core::ShapeType::Point2f& end)
+	{
+		const float dx = end.x - start.x;
+		const float dy = end.y - start.y;
+		const float lengthSq = dx * dx + dy * dy;
+
+		// 두 끝점이 같으면 점까지의 거리다(측정 시작 직후가 이 상태다).
+		if (lengthSq <= 1e-12f)
+		{
+			return DistanceToPoint(point, start);
+		}
+
+		float t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq;
+		t = (t < 0.0f) ? 0.0f : ((t > 1.0f) ? 1.0f : t);
+
+		const Core::ShapeType::Point2f projected = {
+			start.x + dx * t,
+			start.y + dy * t
+		};
+
+		return DistanceToPoint(point, projected);
+	}
+
 	inline Core::ShapeType::Point2f RotateVector(const Core::ShapeType::Point2f& point, float angleRad)
 	{
 		const float cosValue = cosf(angleRad);

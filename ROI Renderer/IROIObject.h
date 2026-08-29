@@ -15,7 +15,8 @@ enum class ROIObjectType : uint8_t
 	Rectangle,
 	Ellipse,
 	Circle,
-	Polygon
+	Polygon,
+	Line
 };
 
 enum class ROIHitType : uint8_t
@@ -60,6 +61,7 @@ struct ROIShapeData
 		struct { float left, top, right, bottom; } rect;
 		struct { float cx, cy, rx, ry, angleRad; } ellipse;
 		struct { float cx, cy, radius; }           circle;
+		struct { float x1, y1, x2, y2; }     line;
 	} u = {};
 };
 

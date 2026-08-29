@@ -189,6 +189,7 @@ public:
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	void ROIClear();
 
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth = 8);
@@ -294,6 +295,14 @@ public:
 	void SetStatusBarVisible(bool visible);
 	void SetBackgroundColor(uint32_t colorRGB);
 	void SetVSyncEnabled(bool enable);
+
+	// 이미지 1픽셀이 실제로 몇 단위인지. 기본 1px = 1 unit.
+	// Line ROI 의 길이 라벨이 이 값을 쓴다.
+	void SetPixelScale(double xScale, double yScale, const wchar_t* unit);
+
+	// 거리 측정 도구 토글. 누를 때마다 기존 측정선을 리셋한다.
+	void ToggleMeasureDistance();
+	bool IsMeasureActive() const;
 
 	// 테스트용 디바이스 로스트 유발.
 	bool SimulateDeviceLost();
@@ -450,6 +459,9 @@ private:
 	std::unique_ptr<SelectionRectRenderLayer> m_selectionRectLayer = nullptr;
 	std::unique_ptr<OverlayRenderLayer> m_overlayLayer = nullptr;
 	std::unique_ptr<ROIRenderLayer> m_roiLayer = nullptr;
+
+	// 거리 측정 모드. 활성 중에는 좌클릭이 ROI 편집 대신 측정으로 간다.
+	bool m_measureActive = false;
 
 	bool m_showImageCenterLineLayer = false;
 	std::unique_ptr<ImageCenterRenderLayer> m_imageCenterLineLayer = nullptr;

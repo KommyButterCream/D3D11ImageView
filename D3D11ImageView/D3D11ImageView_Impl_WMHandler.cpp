@@ -15,6 +15,7 @@
 
 #include "../Render Layer/ImageRenderLayer.h"
 #include "../Render Layer/ROIRenderLayer.h"
+#include "../Render Layer/UIRenderLayer.h"
 #include "../Render Layer/SelectionRectRenderLayer.h"
 
 
@@ -133,6 +134,33 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 		return 0L;
 	}
 
+	// 거리 측정 모드가 켜져 있으면 좌클릭은 측정 전용이다.
+	//
+	// 캡처를 걸지 않는다. 드래그가 아니라 클릭 → 이동 → 클릭이라, 두 클릭
+	// 사이에 우클릭 팬으로 화면을 옮길 수 있어야 한다.
+	if (m_measureActive && m_roiLayer)
+	{
+		bool completed = false;
+		if (m_roiLayer->MeasureOnClick(
+			static_cast<float>(mousePosition.x),
+			static_cast<float>(mousePosition.y), completed))
+		{
+			if (completed)
+			{
+				// 두 번째 점을 찍었다. 모드만 내리고 측정선은 남긴다.
+				m_measureActive = false;
+
+				if (m_uiLayer)
+				{
+					m_uiLayer->SetMeasureButtonActive(false);
+				}
+			}
+
+			InvalidateFrame();
+			return 0L;
+		}
+	}
+
 	if (m_roiLayer && m_roiLayer->OnLButtonDown(static_cast<float>(mousePosition.x), static_cast<float>(mousePosition.y)))
 	{
 		m_mouseButtonMode = MouseButtonMode::LBUTTON_ROI_EDIT;
@@ -233,6 +261,21 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 
 	if (DispatchMouseEvent(MouseEventType::Move, mousePosition.x, mousePosition.y))
 	{
+		return 0L;
+	}
+
+	// 측정 고무줄 단계에서는 끝점이 마우스를 따라간다.
+	// hover 재계산은 건너뛴다 — 지금 중요한 건 만들고 있는 선뿐이다.
+	if (m_measureActive && m_roiLayer && m_roiLayer->IsMeasureRubber())
+	{
+		if (m_roiLayer->MeasureOnMouseMove(
+			static_cast<float>(mousePosition.x),
+			static_cast<float>(mousePosition.y)))
+		{
+			InvalidateFrame();
+		}
+
+		UpdateStatusbar(mousePosition.x, mousePosition.y);
 		return 0L;
 	}
 

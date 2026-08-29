@@ -11,6 +11,7 @@
 
 #include "../../../Module/Core/ShapeType/Circle2f.h"
 #include "../../../Module/Core/ShapeType/Ellipse2f.h"
+#include "../../../Module/Core/ShapeType/Line2f.h"
 #include "../../../Module/Core/ShapeType/Point2f.h"
 #include "../../../Module/Core/ShapeType/Polygon2f.h"
 #include "../../../Module/Core/ShapeType/Rect2f.h"
@@ -49,8 +50,38 @@ public:
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Core::ShapeType::Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	void ROIClear();
 	bool ROIRemove(const wchar_t* key);
+
+	// ── 픽셀 스케일
+	//
+	// 이미지 1픽셀이 실제로 몇 단위인지. 기본은 1px = 1 unit 이다.
+	// Line ROI 의 길이 라벨이 이 값을 적용해 표시한다.
+	// X/Y 를 따로 받는 것은 라인스캔 카메라의 비정방형 픽셀 때문이다.
+	void SetPixelScale(double xScale, double yScale, const wchar_t* unit);
+
+	// ── 거리 측정 도구
+	//
+	// 툴바 버튼이 토글한다. 활성화하면 다음 클릭이 첫 점을 찍고, 두 번째
+	// 점을 찍을 때까지 끝점이 마우스를 따라다닌다(고무줄). 두 번째 클릭으로
+	// 확정되면 평범한 Line ROI 로 남아 이후 끝점 드래그가 가능하다.
+	//
+	// 측정선은 한 번에 하나이고 키는 kMeasureKey 다. 버튼을 누를 때마다
+	// (켜든 끄든) 기존 측정선을 지운다.
+	static const wchar_t* MeasureKey();
+
+	void BeginMeasure();                                  // 활성화 + 리셋
+	void CancelMeasure();                                 // 해제 + 리셋
+	bool IsMeasureArmed() const;                          // 첫 점을 기다리는 중
+	bool IsMeasureRubber() const;                         // 끝점이 따라다니는 중
+
+	// 측정 모드에서의 클릭. true 면 소비했다는 뜻이고, 두 번째 클릭이었다면
+	// outCompleted 가 true 로 돌아온다(호출자가 모드를 내려야 한다).
+	bool MeasureOnClick(float screenX, float screenY, bool& outCompleted);
+
+	// 고무줄 단계에서 끝점을 마우스 위치로 옮긴다. 화면 갱신이 필요하면 true.
+	bool MeasureOnMouseMove(float screenX, float screenY);
 
 	// ── 조회
 	//
@@ -206,6 +237,23 @@ private:
 		float height = 0.0f;
 	};
 	std::unordered_map<const IROIObject*, LabelCache> m_labelCache;
+
+	// 픽셀 스케일. 기본 1px = 1 unit.
+	double m_pixelScaleX = 1.0;
+	double m_pixelScaleY = 1.0;
+	std::wstring m_pixelUnit = L"px";
+
+	// 거리 측정 상태.
+	enum class MeasureState : uint8_t
+	{
+		Off = 0,
+		Armed,      // 활성화됨. 첫 점을 기다린다.
+		Rubber      // 첫 점을 찍었다. 끝점이 마우스를 따라간다.
+	};
+	MeasureState m_measureState = MeasureState::Off;
+
+	// Line ROI 의 길이를 표시용 문자열로 만든다. 스케일과 단위를 적용한다.
+	std::wstring FormatLength(const IROIObject* roiObject) const;
 };
 
 

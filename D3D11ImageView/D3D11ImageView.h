@@ -145,6 +145,7 @@ public:
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Ellipse2f& ellipse, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Circle2f& circle, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	bool ROISet(const wchar_t* key, const wchar_t* name, const Polygon2f& polygon, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
+	bool ROISet(const wchar_t* key, const wchar_t* name, const Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize);
 	void ROIClear();
 
 	// 8bit 소스. bitDepth 를 받는 아래 오버로드에 8 을 넘기는 것과 같다.
@@ -341,6 +342,16 @@ public:
 
 	// 기본값 true. false 로 두면 티어링 대신 프레임이 버려진다.
 	void SetVSyncEnabled(bool enable);
+
+	// 이미지 1픽셀이 실제로 몇 단위인지. 기본 1px = 1 unit.
+	// Line ROI 의 길이 라벨이 이 값을 적용해 표시한다.
+	// X/Y 를 따로 받는 것은 라인스캔 카메라의 비정방형 픽셀 때문이다.
+	void SetPixelScale(double xScale, double yScale, const wchar_t* unit = L"px");
+
+	// 거리 측정 도구 토글. 누를 때마다 기존 측정선을 리셋한다.
+	// 활성 상태에서 이미지를 클릭하면 첫 점, 다시 클릭하면 확정된다.
+	void ToggleMeasureDistance();
+	bool IsMeasureActive() const;
 
 private:
 	// 호스트 콜백. Impl 에는 이 인스턴스를 userData 로 넘기고

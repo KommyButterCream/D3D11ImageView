@@ -898,3 +898,34 @@ void D3D11ImageView::SetVSyncEnabled(bool enable)
 		m_impl->SetVSyncEnabled(enable);
 	}
 }
+
+bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
+{
+	if (m_impl)
+	{
+		return m_impl->ROISet(key, name, line, rgb, isMovable, isResizable, fontSize);
+	}
+
+	return false;
+}
+
+void D3D11ImageView::SetPixelScale(double xScale, double yScale, const wchar_t* unit)
+{
+	if (m_impl)
+	{
+		m_impl->SetPixelScale(xScale, yScale, unit);
+	}
+}
+
+void D3D11ImageView::ToggleMeasureDistance()
+{
+	if (m_impl)
+	{
+		m_impl->ToggleMeasureDistance();
+	}
+}
+
+bool D3D11ImageView::IsMeasureActive() const
+{
+	return m_impl ? m_impl->IsMeasureActive() : false;
+}

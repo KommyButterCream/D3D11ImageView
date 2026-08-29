@@ -52,7 +52,7 @@ bool UIRenderLayer::Initialize(IRenderContext* context)
 
 	constexpr float toolbarWidth = 50.f;
 
-	if (!InitializeLeftToolbar(context, toolbarWidth))
+	if (!InitializeLeftToolbar(context, toolbarWidth, fontManager))
 		return false;
 
 	if (!InitializeContextMenu(context, fontManager))
@@ -167,6 +167,9 @@ void UIRenderLayer::RebindFontManager(FontManager* fontManager)
 	if (m_zoomFitContextMenuButton)         m_zoomFitContextMenuButton->SetFontManager(fontManager);
 	if (m_imageCenterLineContextMenuButton) m_imageCenterLineContextMenuButton->SetFontManager(fontManager);
 
+	// 툴바 — 측정 버튼만 텍스트를 쓴다.
+	if (m_measureButton) m_measureButton->SetFontManager(fontManager);
+
 	// 상태바 라벨
 	if (m_coordinateLabel) m_coordinateLabel->SetFontManager(fontManager);
 	if (m_colorLabel)      m_colorLabel->SetFontManager(fontManager);
@@ -216,7 +219,7 @@ void UIRenderLayer::ReleaseDeviceResources()
 	}
 }
 
-bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbarWidth)
+bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbarWidth, FontManager* fontManager)
 {
 	m_toolbarPanel = std::make_unique<UIPanel>();
 
@@ -334,6 +337,50 @@ bool UIRenderLayer::InitializeLeftToolbar(IRenderContext* context, float toolbar
 		m_zoomFitButton->SetIconStyle(buttonIconDefaultStyle);
 
 		m_toolbarPanel->AddChild(m_zoomFitButton);
+	}
+
+	// 거리 측정 (토글)
+	{
+		// 활성 상태용 스타일. UIButton 에는 체크 상태가 없어서 스타일을
+		// 갈아 끼워 표시한다. 눌린 색을 normal 로 올려 계속 눌린 것처럼 보이게 한다.
+		m_buttonNormalStyle = buttonDefaultStyle;
+
+		m_buttonActiveStyle = buttonDefaultStyle;
+		m_buttonActiveStyle.normal.fill = UIDefaultColor::buttonPressedColor.ToD2DColor();
+		m_buttonActiveStyle.hover.fill = UIDefaultColor::buttonPressedColor.ToD2DColor();
+
+		m_measureButton = std::make_unique<UIButton>();
+
+		m_measureButton->SetStyle(m_buttonNormalStyle);
+		m_measureButton->SetLayout({ 0.f, 0.f, buttonSize, buttonSize });
+		m_measureButton->SetRounded(true);
+		m_measureButton->SetCornerRadius(4.f);
+		m_measureButton->SetCommand(UICommand::MeasureDistance);
+		m_measureButton->SetEventDispatcher(m_uiEventDispatcher);
+
+		// 아이콘 대신 글자를 쓴다. UIButton 은 UILabel 을 상속하므로 그대로 된다.
+		// (이 저장소에는 ../Icons 폴더가 없어 기존 버튼들도 아이콘이 비어 있다)
+		//
+		// 텍스트를 쓰는 유일한 툴바 버튼이라 FontManager 를 직접 연결한다.
+		// RebindFontManager 에도 넣어두어야 디바이스 복구 후 해제된 매니저를
+		// 참조하지 않는다.
+		UITextStyle measureTextStyle;
+		wcscpy_s(measureTextStyle.fontName, 50, L"Segoe UI Symbol");
+		measureTextStyle.fontSize = 18.0f;
+		measureTextStyle.weight = DWRITE_FONT_WEIGHT::DWRITE_FONT_WEIGHT_BOLD;
+		measureTextStyle.hAlign = DWRITE_TEXT_ALIGNMENT::DWRITE_TEXT_ALIGNMENT_CENTER;
+		measureTextStyle.vAlign = DWRITE_PARAGRAPH_ALIGNMENT::DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
+		measureTextStyle.normal.fill = UIDefaultColor::iconNormalColor.ToD2DColor();
+		measureTextStyle.hover.fill = UIDefaultColor::iconHoverColor.ToD2DColor();
+		measureTextStyle.pressed.fill = UIDefaultColor::iconPressedColor.ToD2DColor();
+		measureTextStyle.disabled.fill = UIDefaultColor::iconDisabledColor.ToD2DColor();
+
+		m_measureButton->SetFontManager(fontManager);
+		m_measureButton->SetTextStyle(measureTextStyle);
+		m_measureButton->SetText(L"↔");
+		m_measureButton->SetIconStyle(buttonIconDefaultStyle);
+
+		m_toolbarPanel->AddChild(m_measureButton);
 	}
 
 	// Toolbar Initialize
@@ -927,4 +974,14 @@ void UIRenderLayer::SetStatusBarVisible(bool visible)
 	{
 		m_statusPanel->SetVisible(visible);
 	}
+}
+
+void UIRenderLayer::SetMeasureButtonActive(bool active)
+{
+	if (!m_measureButton)
+	{
+		return;
+	}
+
+	m_measureButton->SetStyle(active ? m_buttonActiveStyle : m_buttonNormalStyle);
 }

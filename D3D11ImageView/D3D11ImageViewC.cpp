@@ -89,6 +89,7 @@ namespace
 		case ROIObjectType::Ellipse:   return D3IV_ROI_ELLIPSE;
 		case ROIObjectType::Circle:    return D3IV_ROI_CIRCLE;
 		case ROIObjectType::Polygon:   return D3IV_ROI_POLYGON;
+		case ROIObjectType::Line:      return D3IV_ROI_LINE;
 		case ROIObjectType::Rectangle:
 		default:                       return D3IV_ROI_RECTANGLE;
 		}
@@ -652,6 +653,25 @@ extern "C" {
 		D3IV_END
 	}
 
+	D3IV_Result D3IV_CALL D3IV_ROISetLine(D3IV_Viewer* viewer,
+		const wchar_t* key, const wchar_t* name, const D3IV_Line2f* line,
+		uint32_t colorRGB, int32_t isMovable, int32_t isResizable, int32_t fontSize)
+	{
+		D3IV_BEGIN(viewer)
+
+		if (!key || !line)
+			return D3IV_ERR_INVALID_ARG;
+
+		const Line2f nativeLine(line->x1, line->y1, line->x2, line->y2);
+
+		return self->ROISet(key, name ? name : L"", nativeLine,
+			static_cast<COLORREF>(colorRGB),
+			isMovable != 0, isResizable != 0, fontSize)
+			? D3IV_OK : D3IV_ERR_FAILED;
+
+		D3IV_END
+	}
+
 	D3IV_Result D3IV_CALL D3IV_ROIClear(D3IV_Viewer* viewer)
 	{
 		D3IV_BEGIN(viewer)
@@ -715,6 +735,13 @@ extern "C" {
 			outShape->u.circle.cx = shape.u.circle.cx;
 			outShape->u.circle.cy = shape.u.circle.cy;
 			outShape->u.circle.radius = shape.u.circle.radius;
+			break;
+
+		case ROIObjectType::Line:
+			outShape->u.line.x1 = shape.u.line.x1;
+			outShape->u.line.y1 = shape.u.line.y1;
+			outShape->u.line.x2 = shape.u.line.x2;
+			outShape->u.line.y2 = shape.u.line.y2;
 			break;
 
 		case ROIObjectType::Polygon:
@@ -1124,6 +1151,41 @@ extern "C" {
 		D3IV_BEGIN(viewer)
 		self->SetVSyncEnabled(enable != 0);
 		return D3IV_OK;
+		D3IV_END
+	}
+
+	D3IV_Result D3IV_CALL D3IV_SetPixelScale(D3IV_Viewer* viewer,
+		double xScale, double yScale, const wchar_t* unit)
+	{
+		D3IV_BEGIN(viewer)
+
+		if (xScale <= 0.0 || yScale <= 0.0)
+			return D3IV_ERR_INVALID_ARG;
+
+		self->SetPixelScale(xScale, yScale, unit ? unit : L"");
+		return D3IV_OK;
+
+		D3IV_END
+	}
+
+	D3IV_Result D3IV_CALL D3IV_ToggleMeasureDistance(D3IV_Viewer* viewer)
+	{
+		D3IV_BEGIN(viewer)
+		self->ToggleMeasureDistance();
+		return D3IV_OK;
+		D3IV_END
+	}
+
+	D3IV_Result D3IV_CALL D3IV_IsMeasureActive(D3IV_Viewer* viewer, int32_t* outActive)
+	{
+		D3IV_BEGIN(viewer)
+
+		if (!outActive)
+			return D3IV_ERR_INVALID_ARG;
+
+		*outActive = self->IsMeasureActive() ? 1 : 0;
+		return D3IV_OK;
+
 		D3IV_END
 	}
 

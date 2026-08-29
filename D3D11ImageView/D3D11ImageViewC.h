@@ -212,6 +212,7 @@ extern "C" {
         D3IV_ROI_ELLIPSE,
         D3IV_ROI_CIRCLE,
         D3IV_ROI_POLYGON,
+        D3IV_ROI_LINE,
     } D3IV_ROIShapeType;
 
     // colorRGB 는 COLORREF 와 같은 0x00BBGGRR 배치.
@@ -253,6 +254,16 @@ extern "C" {
                                                        int32_t isResizable,
                                                        int32_t fontSize);
 
+    // 두 점을 잇는 선. 거리 측정 도구가 만드는 것과 같은 타입이다.
+    D3IV_API D3IV_Result D3IV_CALL D3IV_ROISetLine(D3IV_Viewer* viewer,
+                                                   const wchar_t* key,
+                                                   const wchar_t* name,
+                                                   const D3IV_Line2f* line,
+                                                   uint32_t colorRGB,
+                                                   int32_t isMovable,
+                                                   int32_t isResizable,
+                                                   int32_t fontSize);
+
     D3IV_API D3IV_Result D3IV_CALL D3IV_ROIClear(D3IV_Viewer* viewer);
     D3IV_API D3IV_Result D3IV_CALL D3IV_ROIRemove(D3IV_Viewer* viewer, const wchar_t* key);
 
@@ -276,6 +287,7 @@ extern "C" {
             struct { float left, top, right, bottom; } rect;
             struct { float cx, cy, rx, ry, angleRad; } ellipse;
             struct { float cx, cy, radius; }           circle;
+            struct { float x1, y1, x2, y2; }           line;
         } u;
     } D3IV_ROIShape;
 
@@ -462,6 +474,16 @@ extern "C" {
     D3IV_API D3IV_Result D3IV_CALL D3IV_SetStatusBarVisible(D3IV_Viewer* viewer, int32_t visible);
     D3IV_API D3IV_Result D3IV_CALL D3IV_SetBackgroundColor(D3IV_Viewer* viewer, uint32_t colorRGB);
     D3IV_API D3IV_Result D3IV_CALL D3IV_SetVSyncEnabled(D3IV_Viewer* viewer, int32_t enable);
+
+    // 이미지 1픽셀이 실제로 몇 단위인지. 기본 1px = 1 unit, 단위 "px".
+    // Line ROI 의 길이 라벨이 이 값을 적용해 표시한다.
+    D3IV_API D3IV_Result D3IV_CALL D3IV_SetPixelScale(D3IV_Viewer* viewer,
+                                                      double xScale, double yScale,
+                                                      const wchar_t* unit);
+
+    // 거리 측정 도구 토글. 누를 때마다 기존 측정선을 리셋한다.
+    D3IV_API D3IV_Result D3IV_CALL D3IV_ToggleMeasureDistance(D3IV_Viewer* viewer);
+    D3IV_API D3IV_Result D3IV_CALL D3IV_IsMeasureActive(D3IV_Viewer* viewer, int32_t* outActive);
 
 #ifdef __cplusplus
 } // extern "C"

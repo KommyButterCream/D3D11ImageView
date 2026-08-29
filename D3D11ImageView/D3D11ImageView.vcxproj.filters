@@ -53,6 +53,9 @@
     <ClCompile Include="..\ROI Renderer\ROIEllipseRenderer.cpp">
       <Filter>ROI Renderer</Filter>
     </ClCompile>
+    <ClCompile Include="..\ROI Renderer\ROILineRenderer.cpp">
+      <Filter>ROI Renderer</Filter>
+    </ClCompile>
     <ClCompile Include="..\ROI Renderer\ROIPolygonRenderer.cpp">
       <Filter>ROI Renderer</Filter>
     </ClCompile>
@@ -149,6 +152,9 @@
       <Filter>ROI Renderer</Filter>
     </ClInclude>
     <ClInclude Include="..\ROI Renderer\ROIEllipseRenderer.h">
+      <Filter>ROI Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ROI Renderer\ROILineRenderer.h">
       <Filter>ROI Renderer</Filter>
     </ClInclude>
     <ClInclude Include="..\ROI Renderer\ROIPolygonRenderer.h">

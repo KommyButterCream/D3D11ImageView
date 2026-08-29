@@ -450,6 +450,9 @@ void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 	case UICommand::ImageCenterCrossLine:
 		ToggleImageCenterCrossLine();
 		break;
+	case UICommand::MeasureDistance:
+		ToggleMeasureDistance();
+		break;
 
 	default:
 		break;
