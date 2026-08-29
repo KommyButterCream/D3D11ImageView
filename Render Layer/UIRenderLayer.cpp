@@ -167,6 +167,13 @@ void UIRenderLayer::RebindFontManager(FontManager* fontManager)
 	if (m_zoomFitContextMenuButton)         m_zoomFitContextMenuButton->SetFontManager(fontManager);
 	if (m_imageCenterLineContextMenuButton) m_imageCenterLineContextMenuButton->SetFontManager(fontManager);
 
+	// Save image 항목과 그 하위 메뉴. 하위 메뉴는 패널의 자식이 아니므로
+	// 여기서 빠뜨리면 디바이스 복구 후 해제된 FontManager 를 참조한다.
+	if (m_saveImageContextMenuButton) m_saveImageContextMenuButton->SetFontManager(fontManager);
+	if (m_saveImagePngButton)         m_saveImagePngButton->SetFontManager(fontManager);
+	if (m_saveImageJpegButton)        m_saveImageJpegButton->SetFontManager(fontManager);
+	if (m_saveImageBmpButton)         m_saveImageBmpButton->SetFontManager(fontManager);
+
 	// 툴바 — 측정 버튼만 텍스트를 쓴다.
 	if (m_measureButton) m_measureButton->SetFontManager(fontManager);
 
@@ -589,6 +596,89 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		m_imageCenterLineContextMenuButton->SetCheckable(true);
 
 		m_contextMenuPanel->AddChild(m_imageCenterLineContextMenuButton);
+	}
+
+	{
+		m_contextMenuSplitBar2 = std::make_shared<UISplitBar>();
+
+		m_contextMenuSplitBar2->SetLineColor(UIDefaultColor::contextSplitBarColor.ToD2DColor());
+		m_contextMenuSplitBar2->SetLayout({ 0.f, 0.f, menuButtonWidth, 3.0f });
+		m_contextMenuSplitBar2->SetSplitbarType(SplitBarType::Horizontal);
+		m_contextMenuPanel->AddChild(m_contextMenuSplitBar2);
+	}
+
+	// ── Save image ▸ (하위 메뉴) ─────────────────────────────────────
+	//
+	// 아직 저장 동작은 붙이지 않았다. 커맨드를 주지 않으므로 잎 항목을
+	// 눌러도 메뉴가 닫히기만 한다. 형식별 커맨드를 UICommand 에 추가하고
+	// SetCommand / SetEventDispatcher 를 채우면 그대로 연동된다.
+	{
+		m_saveImageContextMenuButton = std::make_shared<UIContextMenuButton>();
+
+		m_saveImageContextMenuButton->SetFontManager(fontManager);
+		m_saveImageContextMenuButton->SetStyle(contextMenuButtonDefaultStyle);
+		m_saveImageContextMenuButton->SetLayout({ 0.f, 0.f, menuButtonWidth, menuButtonHeight });
+		m_saveImageContextMenuButton->SetRounded(true);
+		m_saveImageContextMenuButton->SetCornerRadius(2.f);
+		m_saveImageContextMenuButton->SetIconAreaWidth(30.0f);
+		m_saveImageContextMenuButton->SetExtraAreaWidth(50.0f);
+		m_saveImageContextMenuButton->SetText(L"Save image");
+		m_saveImageContextMenuButton->SetTextStyle(contextMenuButtonTextDefaultStyle);
+
+		m_contextMenuPanel->AddChild(m_saveImageContextMenuButton);
+
+		// 하위 메뉴 패널. 루트와 같은 스타일이되 폭은 조금 좁게 잡는다.
+		constexpr float subMenuWidth = 200.0f;
+		constexpr float subMenuButtonWidth = subMenuWidth - (padding * 2.0f);
+
+		m_saveImageSubMenu = std::make_shared<UIContextMenuPanel>();
+
+		UIStyle& subMenuStyle = m_saveImageSubMenu->GetStyle();
+		subMenuStyle.borderThickness = 0.0f;
+		subMenuStyle.normal.fill = UIDefaultColor::contextMenuPanelNormalColor.ToD2DColor();
+		subMenuStyle.normal.border = UIDefaultColor::contextMenuPanelBorderColor.ToD2DColor();
+
+		m_saveImageSubMenu->SetMenuWidth(subMenuWidth);
+		m_saveImageSubMenu->SetPadding(padding);
+		m_saveImageSubMenu->SetSpacing(spacing);
+		m_saveImageSubMenu->SetLayoutType(UILayoutType::Vertical);
+		m_saveImageSubMenu->SetRounded(true);
+		m_saveImageSubMenu->SetCornerRadius(4.f);
+
+		struct SaveFormatItem
+		{
+			const wchar_t* text;
+			std::shared_ptr<UIContextMenuButton>* slot;
+		};
+
+		const SaveFormatItem items[] = {
+			{ L"Save to PNG",  &m_saveImagePngButton  },
+			{ L"Save to JPEG", &m_saveImageJpegButton },
+			{ L"Save to BMP",  &m_saveImageBmpButton  },
+		};
+
+		for (const SaveFormatItem& item : items)
+		{
+			auto button = std::make_shared<UIContextMenuButton>();
+
+			button->SetFontManager(fontManager);
+			button->SetStyle(contextMenuButtonDefaultStyle);
+			button->SetLayout({ 0.f, 0.f, subMenuButtonWidth, menuButtonHeight });
+			button->SetRounded(true);
+			button->SetCornerRadius(2.f);
+			button->SetIconAreaWidth(30.0f);
+			button->SetExtraAreaWidth(10.0f);
+			button->SetText(item.text);
+			button->SetTextStyle(contextMenuButtonTextDefaultStyle);
+
+			m_saveImageSubMenu->AddChild(button);
+			*item.slot = std::move(button);
+		}
+
+		// 붙이는 쪽이 하위 메뉴를 소유한다. 항목에는 "하위 메뉴가 있다" 는
+		// 표시(▸)만 켜지고, 여닫기는 전부 패널이 처리한다.
+		m_contextMenuPanel->AttachSubMenu(
+			m_saveImageContextMenuButton.get(), m_saveImageSubMenu);
 	}
 
 	return true;

@@ -113,6 +113,15 @@ private:
 	std::shared_ptr<UIContextMenuButton> m_zoomFitContextMenuButton = nullptr;
 	std::shared_ptr<UISplitBar> m_contextMenuSplitBar1 = nullptr;
 	std::shared_ptr<UIContextMenuButton> m_imageCenterLineContextMenuButton = nullptr;
+	std::shared_ptr<UISplitBar> m_contextMenuSplitBar2 = nullptr;
+
+	// Save image — 하위 메뉴를 여는 항목이라 커맨드를 갖지 않는다.
+	// 실제 저장 동작은 아직 붙이지 않았고, 잎 항목도 커맨드가 없다.
+	std::shared_ptr<UIContextMenuButton> m_saveImageContextMenuButton = nullptr;
+	std::shared_ptr<UIContextMenuPanel> m_saveImageSubMenu = nullptr;
+	std::shared_ptr<UIContextMenuButton> m_saveImagePngButton = nullptr;
+	std::shared_ptr<UIContextMenuButton> m_saveImageJpegButton = nullptr;
+	std::shared_ptr<UIContextMenuButton> m_saveImageBmpButton = nullptr;
 
 	std::unique_ptr<UIStatusPanel> m_statusPanel = nullptr;
 	std::shared_ptr<UIIconLabel> m_coordinateLabel = nullptr;
