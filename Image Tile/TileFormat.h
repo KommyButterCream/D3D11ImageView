@@ -64,9 +64,12 @@ namespace TileFormat
 	//
 	//   1) 변 단위 하드 한계  - 면적이 아니라 각 변으로 판단해야 한다.
 	//                          (30000x2000 은 면적은 작지만 변이 초과)
-	//   2) 밉 포함 상주 예산  - VRAM 과 최초 업로드 히치를 동시에 막는다.
+	//   2) 실제 생성할 mip 구성을 포함한 상주 예산
+	//      - generateMipMaps == false 이면 mip 0만 계산한다.
+	//      - true 이면 전체 mip chain의 4/3 오버헤드를 포함한다.
 	inline bool CanUseSingleTexture(uint32_t width, uint32_t height,
-		DXGI_FORMAT format, uint32_t concurrentViews = 1) noexcept
+		DXGI_FORMAT format, uint32_t concurrentViews = 1,
+		bool generateMipMaps = false) noexcept
 	{
 		if (width == 0 || height == 0)
 			return false;
@@ -76,7 +79,9 @@ namespace TileFormat
 
 		const uint64_t base =
 			static_cast<uint64_t>(width) * height * BytesPerPixel(format);
-		const uint64_t resident = base * kMipChainNumerator / kMipChainDenominator;
+		const uint64_t resident = generateMipMaps
+			? base * kMipChainNumerator / kMipChainDenominator
+			: base;
 
 		const uint32_t views = (concurrentViews == 0) ? 1 : concurrentViews;
 

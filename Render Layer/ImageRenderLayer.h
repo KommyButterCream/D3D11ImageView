@@ -29,6 +29,7 @@ struct ID3D11Texture2D;
 struct ID3D11ShaderResourceView;
 struct ID3D11SamplerState;
 struct ID3D11RasterizerState;
+struct IDXGIKeyedMutex;
 
 namespace GRAPHICS
 {
@@ -87,6 +88,12 @@ public:
 	bool UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height);
 	bool UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height);
 
+	// Single 모드에서만 mip chain을 생성한다. Tiled 모드는 TileManager의
+	// LOD를 사용하므로 이 설정과 관계없이 single mip chain을 만들지 않는다.
+	// 기본값은 false다.
+	bool SetMipMapGenerationEnabled(bool enable);
+	bool IsMipMapGenerationEnabled() const;
+
 	// Attach 된 원본 포인터 참조를 끊는다.
 	// 호출자가 그 버퍼를 해제하기 전에 반드시 거쳐야 하는 경로다.
 	void DetachImage();
@@ -137,7 +144,9 @@ private:
 	// 노출하므로 거기서 되돌린다. 이미지가 없으면 8 을 준다.
 	uint32_t GetAttachedBitDepth() const;
 
-	bool CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format, bool needsComputeUpload);
+	bool CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format,
+		bool needsComputeUpload, bool generateMipMaps);
+	bool RecreateSingleBufferForMipSetting(bool generateMipMaps);
 	void GenerateSingleMips();
 	void ReleaseUnusedModeResources(RenderMode activeMode);
 	bool CreateRawUploadBuffer(uint32_t maxByteSize);
@@ -247,6 +256,8 @@ private:
 	uint32_t m_singleTextureWidth = 0;
 	uint32_t m_singleTextureHeight = 0;
 	DXGI_FORMAT m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+	bool m_mipMapGenerationEnabled = false;
+	bool m_singleTextureHasMipMaps = false;
 
 	// Single 모드 VRAM 예산을 나눌 동시 뷰어 개수.
 	// 검사 UI 에서 뷰어를 여러 개 띄우면 전량 상주 비용이 그 배수로 곱해진다.
@@ -264,4 +275,5 @@ private:
 	// Shared Resource
 	HANDLE m_sharedHandle = nullptr;
 	ID3D11Texture2D* m_sharedTexture = nullptr;
+	IDXGIKeyedMutex* m_sharedKeyedMutex = nullptr;
 };

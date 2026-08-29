@@ -24,6 +24,22 @@ static constexpr uint32_t kVerticesPerTile = 6;
 // 뷰포트/프리페치 계산이 깨졌을 때 버퍼가 무한히 커지는 것을 막는 안전장치다.
 static constexpr uint32_t kMaxTileVertexLimit = 65536;
 
+// D3D11DuplicateEngine의 단일 shared texture 소유권 프로토콜.
+static constexpr UINT64 kCaptureAcquireKey = 0;
+static constexpr UINT64 kViewerAcquireKey = 1;
+
+static bool CanCopyWholeTexture(const D3D11_TEXTURE2D_DESC& destination,
+	const D3D11_TEXTURE2D_DESC& source)
+{
+	return destination.Width == source.Width &&
+		destination.Height == source.Height &&
+		destination.MipLevels == source.MipLevels &&
+		destination.ArraySize == source.ArraySize &&
+		destination.Format == source.Format &&
+		destination.SampleDesc.Count == source.SampleDesc.Count &&
+		destination.SampleDesc.Quality == source.SampleDesc.Quality;
+}
+
 // 확대 필터 전환 임계(Single 모드).
 //
 // 이 아래는 LINEAR(부드러움), 이 위는 POINT(픽셀 경계 보존).
@@ -313,6 +329,63 @@ bool ImageRenderLayer::IsImageRenderDirty() const
 	return m_tileManager->HasPendingUploads();
 }
 
+bool ImageRenderLayer::SetMipMapGenerationEnabled(bool enable)
+{
+	if (m_mipMapGenerationEnabled == enable)
+		return true;
+
+	// Device lost 중에는 재생성할 GPU 리소스가 없다. 정책만 저장하면
+	// RestoreImageAfterDeviceLoss 또는 다음 텍스처 입력이 새 설정을 적용한다.
+	if (!m_deviceResourcesReady)
+	{
+		m_mipMapGenerationEnabled = enable;
+		return true;
+	}
+
+	// RawImage는 정책 변경으로 VRAM 예산 판정까지 달라질 수 있다. 같은 원본을
+	// UpdateImage에 다시 통과시켜 Single <-> Tiled 전환도 함께 처리한다.
+	if (m_inputSource == ImageInputSource::RawImage && m_image && !m_image->IsEmpty())
+	{
+		const uint8_t* data = m_image->ImageBuffer();
+		const uint32_t width = m_image->Width();
+		const uint32_t height = m_image->Height();
+		const uint32_t stride = m_image->Stride();
+		const uint32_t channel = m_image->Channel();
+		const uint32_t bitDepth = GetAttachedBitDepth();
+		const bool previousSetting = m_mipMapGenerationEnabled;
+
+		m_mipMapGenerationEnabled = enable;
+		if (UpdateImage(data, width, height, stride, channel, bitDepth))
+			return true;
+
+		// 새 정책 적용이 실패하면 이전 정책으로 화면 구성을 복구한다.
+		m_mipMapGenerationEnabled = previousSetting;
+		UpdateImage(data, width, height, stride, channel, bitDepth);
+		return false;
+	}
+
+	// Tiled 모드는 TileManager가 자체 LOD를 관리한다. GPU texture 입력은 현재
+	// Tiled를 사용하지 않으므로, 이 경우에는 다음 Single 입력용 정책만 저장한다.
+	if (m_currentMode != RenderMode::Single || !m_singleTexture)
+	{
+		m_mipMapGenerationEnabled = enable;
+		return true;
+	}
+
+	// 이미 표시 중인 Single 이미지는 mip 0을 보존한 채 새 구성으로 교체한다.
+	// 실패하면 CreateSingleBuffer가 기존 리소스를 유지하므로 설정도 바꾸지 않는다.
+	if (!RecreateSingleBufferForMipSetting(enable))
+		return false;
+
+	m_mipMapGenerationEnabled = enable;
+	return true;
+}
+
+bool ImageRenderLayer::IsMipMapGenerationEnabled() const
+{
+	return m_mipMapGenerationEnabled;
+}
+
 bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth)
 {
 	if (!data || width == 0 || height == 0 || stride == 0)
@@ -340,10 +413,10 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 
 	// Single(전량 상주) 가능 여부.
 	//   1) 변 단위 하드 한계(16384)
-	//   2) 밉 포함 상주 예산
+	//   2) 현재 mip 생성 정책을 반영한 상주 예산
 	// D3D11 에는 부분 상주 텍스처가 없으므로, 예산을 넘으면 타일링으로 간다.
-	const bool preferSingle =
-		TileFormat::CanUseSingleTexture(width, height, format, m_concurrentViewCount);
+	const bool preferSingle = TileFormat::CanUseSingleTexture(
+		width, height, format, m_concurrentViewCount, m_mipMapGenerationEnabled);
 
 	// 3채널만 컴퓨트 셰이더 확장이 필요하다.
 	// (D3D11 에 24bit 텍스처 포맷이 아예 없어 저장 자체가 불가능하므로,
@@ -352,7 +425,8 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 
 	RenderMode newMode = RenderMode::Tiled;
 
-	if (preferSingle && CreateSingleBuffer(width, height, format, needsComputeUpload))
+	if (preferSingle && CreateSingleBuffer(
+		width, height, format, needsComputeUpload, m_mipMapGenerationEnabled))
 	{
 		newMode = RenderMode::Single;
 
@@ -372,7 +446,10 @@ bool ImageRenderLayer::UpdateImage(const uint8_t* data, uint32_t width, uint32_t
 			UploadSingleImage_GPU(data, width, height, stride, channel);
 		}
 
-		GenerateSingleMips();
+		if (m_mipMapGenerationEnabled)
+		{
+			GenerateSingleMips();
+		}
 	}
 
 	if (newMode == RenderMode::Tiled)
@@ -439,6 +516,7 @@ void ImageRenderLayer::DetachImage()
 	m_singleTextureWidth = 0;
 	m_singleTextureHeight = 0;
 	m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+	m_singleTextureHasMipMaps = false;
 	m_maxByteSize = 0;
 
 	m_inputSource = ImageInputSource::None;
@@ -467,6 +545,7 @@ void ImageRenderLayer::ReleaseUnusedModeResources(RenderMode activeMode)
 		m_singleTextureWidth = 0;
 		m_singleTextureHeight = 0;
 		m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+		m_singleTextureHasMipMaps = false;
 		m_maxByteSize = 0;
 	}
 }
@@ -493,16 +572,35 @@ bool ImageRenderLayer::UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, 
 	height = desc.Height;
 
 	// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
-	if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, false))
+	if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM,
+		false, m_mipMapGenerationEnabled))
 		return false;
 
-	m_contextD3D->CopyResource(m_singleTexture, texture);
-	GenerateSingleMips();
+	D3D11_TEXTURE2D_DESC destinationDesc = {};
+	m_singleTexture->GetDesc(&destinationDesc);
+
+	if (CanCopyWholeTexture(destinationDesc, desc))
+	{
+		m_contextD3D->CopyResource(m_singleTexture, texture);
+	}
+	else
+	{
+		m_contextD3D->CopySubresourceRegion(
+			m_singleTexture, 0, 0, 0, 0, texture, 0, nullptr);
+		if (m_mipMapGenerationEnabled)
+		{
+			GenerateSingleMips();
+		}
+	}
 
 	if (m_image)
 	{
 		m_image->ReleaseBuffer();
 	}
+
+	// 직전 입력이 Tiled RawImage였다면 타일 풀을 놓는다. 텍스처 입력은
+	// 항상 Single로 렌더링하므로 두 경로의 VRAM을 동시에 유지할 이유가 없다.
+	ReleaseUnusedModeResources(RenderMode::Single);
 
 	UpdateImageState(ImageInputSource::Texture, width, height, RenderMode::Single, 0);
 
@@ -517,33 +615,76 @@ bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width,
 	if (!OpenSharedResource(sharedHandle))
 		return false;
 
-	D3D11_TEXTURE2D_DESC desc = {};
-	m_sharedTexture->GetDesc(&desc);
-
-	if (desc.Width == 0 || desc.Height == 0 || desc.Width > TileFormat::kMaxTextureDim || desc.Height > TileFormat::kMaxTextureDim)
-		return false;
-
-	width = desc.Width;
-	height = desc.Height;
-
-	// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
-	if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM, false))
-		return false;
-
-	m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
-	GenerateSingleMips();
-
-	// Shared texture updates do not own CPU image memory.
-	if (m_image)
+	// Keyed mutex가 있는 입력은 캡처 장치가 key 1로 넘긴 프레임만 읽는다.
+	// 일반 shared texture 입력(NVDEC 등)은 기존 호환 경로를 유지한다.
+	bool keyedMutexAcquired = false;
+	if (m_sharedKeyedMutex)
 	{
-		m_image->ReleaseBuffer();
-		//m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, 8);
+		const HRESULT acquireHr = m_sharedKeyedMutex->AcquireSync(kViewerAcquireKey, 0);
+		if (acquireHr == WAIT_TIMEOUT || acquireHr == WAIT_ABANDONED || FAILED(acquireHr))
+			return false;
+
+		keyedMutexAcquired = true;
 	}
 
-	// Update camera state only when the image source or size changes.
-	UpdateImageState(ImageInputSource::SharedTexture, width, height, RenderMode::Single, 0);
+	bool updateSucceeded = false;
+	do
+	{
+		D3D11_TEXTURE2D_DESC desc = {};
+		m_sharedTexture->GetDesc(&desc);
 
-	return true;
+		if (desc.Width == 0 || desc.Height == 0 || desc.Width > TileFormat::kMaxTextureDim || desc.Height > TileFormat::kMaxTextureDim)
+			break;
+
+		width = desc.Width;
+		height = desc.Height;
+
+		// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
+		if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM,
+			false, m_mipMapGenerationEnabled))
+			break;
+
+		D3D11_TEXTURE2D_DESC destinationDesc = {};
+		m_singleTexture->GetDesc(&destinationDesc);
+
+		if (CanCopyWholeTexture(destinationDesc, desc))
+		{
+			m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
+		}
+		else
+		{
+			m_contextD3D->CopySubresourceRegion(
+				m_singleTexture, 0, 0, 0, 0, m_sharedTexture, 0, nullptr);
+			if (m_mipMapGenerationEnabled)
+			{
+				GenerateSingleMips();
+			}
+		}
+
+		// Shared texture updates do not own CPU image memory.
+		if (m_image)
+		{
+			m_image->ReleaseBuffer();
+			//m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, 8);
+		}
+
+		ReleaseUnusedModeResources(RenderMode::Single);
+
+		// Update camera state only when the image source or size changes.
+		UpdateImageState(ImageInputSource::SharedTexture, width, height, RenderMode::Single, 0);
+		updateSucceeded = true;
+	} while (false);
+
+	if (keyedMutexAcquired)
+	{
+		// Copy 명령을 다른 장치에 넘기기 전에 제출한다. Flush는 비동기이며
+		// GPU 완료 자체는 keyed mutex의 소유권 전환으로 동기화된다.
+		m_contextD3D->Flush();
+		if (FAILED(m_sharedKeyedMutex->ReleaseSync(kCaptureAcquireKey)))
+			return false;
+	}
+
+	return updateSucceeded;
 }
 
 void ImageRenderLayer::UpdateImageState(ImageInputSource source, uint32_t width, uint32_t height, RenderMode mode, uint32_t channel)
@@ -787,11 +928,15 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_rawUploadSRV);
 	SafeRelease(m_singleConvertCB);
 
+	SafeRelease(m_sharedKeyedMutex);
 	SafeRelease(m_sharedTexture);
+	m_sharedHandle = nullptr;
 
 	// 지연 생성 리소스의 크기 추적값을 리셋해야 재생성 시 다시 잡힌다.
 	m_singleTextureWidth = 0;
 	m_singleTextureHeight = 0;
+	m_singleTextureFormat = DXGI_FORMAT_UNKNOWN;
+	m_singleTextureHasMipMaps = false;
 	m_maxByteSize = 0;
 }
 
@@ -1171,9 +1316,10 @@ bool ImageRenderLayer::CreateTileVertexBuffer(uint32_t vertexCount)
 	return true;
 }
 
-bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_FORMAT format, bool needsComputeUpload)
+bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height,
+	DXGI_FORMAT format, bool needsComputeUpload, bool generateMipMaps)
 {
-	// UAV 유무까지 일치해야 재사용할 수 있다.
+	// UAV와 mip 구성까지 일치해야 재사용할 수 있다.
 	// (같은 BGRA 라도 3채널 소스는 UAV 가 필요하고 4채널은 아니다)
 	const bool hasUAV = (m_singleUAV != nullptr);
 
@@ -1181,28 +1327,28 @@ bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_
 		m_singleTextureWidth == width &&
 		m_singleTextureHeight == height &&
 		m_singleTextureFormat == format &&
-		hasUAV == needsComputeUpload)
+		hasUAV == needsComputeUpload &&
+		m_singleTextureHasMipMaps == generateMipMaps)
 	{
 		return true;
 	}
 
-	// Release existing single-texture resources.
-	SafeRelease(m_singleSRV);
-	SafeRelease(m_singleUAV);
-	SafeRelease(m_singleTexture);
-
 	D3D11_TEXTURE2D_DESC desc = {};
 	desc.Width = width;
 	desc.Height = height;
-	desc.MipLevels = 0;  // 0 = 전체 밉 체인 자동 생성 (축소 시 에일리어싱 제거)
+	desc.MipLevels = generateMipMaps ? 0u : 1u;
 	desc.ArraySize = 1;
 	// 소스 채널에 맞춘 포맷. Gray 는 R8/R16 이라 BGRA 대비 VRAM 이 1/4~1/2 다.
 	desc.Format = format;
 	desc.SampleDesc.Count = 1;
 	desc.Usage = D3D11_USAGE_DEFAULT; // GPU resource used as a copy/render target
-	// GENERATE_MIPS 는 BIND_RENDER_TARGET | BIND_SHADER_RESOURCE 를 함께 요구한다.
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	if (generateMipMaps)
+	{
+		// GENERATE_MIPS 는 RENDER_TARGET과 SHADER_RESOURCE를 함께 요구한다.
+		desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+		desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+	}
 
 	// BGR 24bit 확장은 컴퓨트 셰이더가 UAV 로 mip 0 에 쓴다.
 	// 그 외(1채널 R8/R16, 4채널 BGRA)는 포맷이 소스와 일치해
@@ -1210,31 +1356,84 @@ bool ImageRenderLayer::CreateSingleBuffer(uint32_t width, uint32_t height, DXGI_
 	if (needsComputeUpload)
 		desc.BindFlags |= D3D11_BIND_UNORDERED_ACCESS;
 
-	HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &m_singleTexture);
+	ID3D11Texture2D* newTexture = nullptr;
+	ID3D11ShaderResourceView* newSRV = nullptr;
+	ID3D11UnorderedAccessView* newUAV = nullptr;
+
+	HRESULT hr = m_device->CreateTexture2D(&desc, nullptr, &newTexture);
 	if (FAILED(hr))
 		return false;
 
-	hr = m_device->CreateShaderResourceView(m_singleTexture, nullptr, &m_singleSRV);
+	hr = m_device->CreateShaderResourceView(newTexture, nullptr, &newSRV);
 	if (FAILED(hr))
+	{
+		SafeRelease(newTexture);
 		return false;
+	}
 
 	if (needsComputeUpload)
 	{
-		// 밉 체인이 생겼으므로 UAV 는 mip 0 만 명시적으로 지정한다.
-		// (컴퓨트 셰이더는 mip 0 에만 쓰고, 나머지는 GenerateMips 가 채운다.)
+		// 컴퓨트 셰이더는 mip 0에만 쓴다. mip chain이 있으면 이후 GenerateMips가
+		// 나머지를 채우고, 없으면 이 한 레벨이 곧 전체 텍스처다.
 		D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 		uavDesc.Format = format;
 		uavDesc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
 		uavDesc.Texture2D.MipSlice = 0;
 
-		hr = m_device->CreateUnorderedAccessView(m_singleTexture, &uavDesc, &m_singleUAV);
+		hr = m_device->CreateUnorderedAccessView(newTexture, &uavDesc, &newUAV);
 		if (FAILED(hr))
+		{
+			SafeRelease(newSRV);
+			SafeRelease(newTexture);
 			return false;
+		}
 	}
+
+	// 새 구성이 완성된 뒤 교체해야 생성 실패 시 현재 화면을 보존할 수 있다.
+	SafeRelease(m_singleSRV);
+	SafeRelease(m_singleUAV);
+	SafeRelease(m_singleTexture);
+	m_singleTexture = newTexture;
+	m_singleSRV = newSRV;
+	m_singleUAV = newUAV;
 
 	m_singleTextureWidth = width;
 	m_singleTextureHeight = height;
 	m_singleTextureFormat = format;
+	m_singleTextureHasMipMaps = generateMipMaps;
+
+	return true;
+}
+
+bool ImageRenderLayer::RecreateSingleBufferForMipSetting(bool generateMipMaps)
+{
+	if (!m_singleTexture || m_currentMode != RenderMode::Single)
+		return true;
+
+	ID3D11Texture2D* previousTexture = m_singleTexture;
+	previousTexture->AddRef();
+
+	const bool needsComputeUpload = (m_singleUAV != nullptr);
+	const uint32_t width = m_singleTextureWidth;
+	const uint32_t height = m_singleTextureHeight;
+	const DXGI_FORMAT format = m_singleTextureFormat;
+
+	if (!CreateSingleBuffer(width, height, format, needsComputeUpload, generateMipMaps))
+	{
+		previousTexture->Release();
+		return false;
+	}
+
+	// 이전 리소스의 mip 0은 모든 입력 타입에서 유효하다. 새 텍스처의 mip 0에
+	// 복사한 뒤 필요한 경우에만 하위 mip을 다시 만든다.
+	m_contextD3D->CopySubresourceRegion(
+		m_singleTexture, 0, 0, 0, 0, previousTexture, 0, nullptr);
+	previousTexture->Release();
+
+	if (generateMipMaps)
+	{
+		GenerateSingleMips();
+	}
 
 	return true;
 }
@@ -1295,13 +1494,19 @@ bool ImageRenderLayer::OpenSharedResource(HANDLE sharedHandle)
 
 	if (sharedHandle != m_sharedHandle || m_sharedTexture == nullptr)
 	{
+		SafeRelease(m_sharedKeyedMutex);
 		SafeRelease(m_sharedTexture);
+		m_sharedHandle = nullptr;
 
 		hr = m_device->OpenSharedResource(
 			sharedHandle, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&m_sharedTexture));
 
 		if (SUCCEEDED(hr))
 		{
+			// Legacy shared resources (for example the existing NVDEC path) do not
+			// expose IDXGIKeyedMutex and continue through the unsynchronized path.
+			m_sharedTexture->QueryInterface(
+				__uuidof(IDXGIKeyedMutex), reinterpret_cast<void**>(&m_sharedKeyedMutex));
 			m_sharedHandle = sharedHandle;
 		}
 		else
@@ -1581,8 +1786,9 @@ void ImageRenderLayer::SetCommonShaderStates()
 
 	m_contextD3D->PSSetShader(pixelShader, nullptr, 0);
 
-	// Single 은 밉 체인이 있어 LINEAR 축소가 가능하지만, Tiled 는 타일 경계
-	// 이음새 때문에 POINT 를 유지해야 한다.
+	// Single은 설정에 따라 mip 0만 있거나 전체 mip chain을 가진다. 두 경우
+	// 모두 LINEAR 축소가 가능하다(한 레벨이면 mip 필터는 mip 0으로 고정됨).
+	// Tiled는 타일 경계 이음새 때문에 POINT를 유지한다.
 	ID3D11SamplerState* sampler = m_samplerPoint;
 
 	if (m_currentMode == RenderMode::Single)

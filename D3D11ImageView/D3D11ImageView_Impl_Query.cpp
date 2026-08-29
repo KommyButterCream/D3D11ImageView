@@ -488,3 +488,34 @@ void D3D11ImageView_Impl::SetVSyncEnabled(bool enable)
 		m_renderContext->SetVSyncEnabled(enable);
 	}
 }
+
+void D3D11ImageView_Impl::SetMipMapGenerationEnabled(bool enable)
+{
+	::AcquireSRWLockExclusive(&m_renderLock);
+
+	bool applied = true;
+	if (m_imageLayer)
+	{
+		applied = m_imageLayer->SetMipMapGenerationEnabled(enable);
+	}
+
+	if (applied)
+	{
+		m_mipMapGenerationEnabled = enable;
+	}
+
+	::ReleaseSRWLockExclusive(&m_renderLock);
+
+	if (applied)
+	{
+		InvalidateFrame();
+	}
+}
+
+bool D3D11ImageView_Impl::IsMipMapGenerationEnabled() const
+{
+	::AcquireSRWLockShared(&m_renderLock);
+	const bool enabled = m_mipMapGenerationEnabled;
+	::ReleaseSRWLockShared(&m_renderLock);
+	return enabled;
+}

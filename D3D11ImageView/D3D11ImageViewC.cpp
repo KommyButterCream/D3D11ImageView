@@ -1154,6 +1154,27 @@ extern "C" {
 		D3IV_END
 	}
 
+	D3IV_Result D3IV_CALL D3IV_SetMipMapGenerationEnabled(D3IV_Viewer* viewer, int32_t enable)
+	{
+		D3IV_BEGIN(viewer)
+		self->SetMipMapGenerationEnabled(enable != 0);
+		return D3IV_OK;
+		D3IV_END
+	}
+
+	D3IV_Result D3IV_CALL D3IV_IsMipMapGenerationEnabled(D3IV_Viewer* viewer, int32_t* outEnabled)
+	{
+		D3IV_BEGIN(viewer)
+
+		if (!outEnabled)
+			return D3IV_ERR_INVALID_ARG;
+
+		*outEnabled = self->IsMipMapGenerationEnabled() ? 1 : 0;
+		return D3IV_OK;
+
+		D3IV_END
+	}
+
 	D3IV_Result D3IV_CALL D3IV_SetPixelScale(D3IV_Viewer* viewer,
 		double xScale, double yScale, const wchar_t* unit)
 	{

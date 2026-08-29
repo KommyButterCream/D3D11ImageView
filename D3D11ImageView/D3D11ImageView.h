@@ -344,6 +344,11 @@ public:
 	// 기본값 true. false 로 두면 티어링 대신 프레임이 버려진다.
 	void SetVSyncEnabled(bool enable);
 
+	// Single 모드 텍스처의 mip chain 생성 여부. 기본값 false.
+	// Tiled 모드는 이 값과 무관하게 TileManager의 LOD를 사용한다.
+	void SetMipMapGenerationEnabled(bool enable);
+	bool IsMipMapGenerationEnabled() const;
+
 	// 이미지 1픽셀이 실제로 몇 단위인지. 기본 1px = 1 unit.
 	// Line ROI 의 길이 라벨이 이 값을 적용해 표시한다.
 	// X/Y 를 따로 받는 것은 라인스캔 카메라의 비정방형 픽셀 때문이다.

@@ -151,6 +151,7 @@ bool D3D11ImageView_Impl::Initialize(D3D11RenderEngine* D3D11Engine, HWND hWndPa
 	m_imageLayer->SetTileManager(m_tileManager.get());
 	if (!m_imageLayer->Initialize(m_renderContext.get()))
 		return failInitialize();
+	m_imageLayer->SetMipMapGenerationEnabled(m_mipMapGenerationEnabled);
 
 	m_layers.push_back(m_imageLayer.get());
 

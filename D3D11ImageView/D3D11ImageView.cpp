@@ -899,6 +899,19 @@ void D3D11ImageView::SetVSyncEnabled(bool enable)
 	}
 }
 
+void D3D11ImageView::SetMipMapGenerationEnabled(bool enable)
+{
+	if (m_impl)
+	{
+		m_impl->SetMipMapGenerationEnabled(enable);
+	}
+}
+
+bool D3D11ImageView::IsMipMapGenerationEnabled() const
+{
+	return m_impl ? m_impl->IsMipMapGenerationEnabled() : false;
+}
+
 bool D3D11ImageView::ROISet(const wchar_t* key, const wchar_t* name, const Line2f& line, COLORREF rgb, bool isMovable, bool isResizable, int32_t fontSize)
 {
 	if (m_impl)

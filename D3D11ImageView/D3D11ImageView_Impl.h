@@ -314,6 +314,8 @@ public:
 	void SetStatusBarVisible(bool visible);
 	void SetBackgroundColor(uint32_t colorRGB);
 	void SetVSyncEnabled(bool enable);
+	void SetMipMapGenerationEnabled(bool enable);
+	bool IsMipMapGenerationEnabled() const;
 
 	// 이미지 1픽셀이 실제로 몇 단위인지. 기본 1px = 1 unit.
 	// Line ROI 의 길이 라벨이 이 값을 쓴다.
@@ -525,6 +527,7 @@ private:
 	std::unique_ptr<RenderThread> m_renderThread = nullptr;
 
 	std::unique_ptr<TileManager> m_tileManager = nullptr;
+	bool m_mipMapGenerationEnabled = false;
 
 	std::vector<IRenderLayer*> m_layers;
 

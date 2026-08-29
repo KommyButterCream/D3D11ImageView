@@ -475,6 +475,11 @@ extern "C" {
     D3IV_API D3IV_Result D3IV_CALL D3IV_SetBackgroundColor(D3IV_Viewer* viewer, uint32_t colorRGB);
     D3IV_API D3IV_Result D3IV_CALL D3IV_SetVSyncEnabled(D3IV_Viewer* viewer, int32_t enable);
 
+    // Single 모드 텍스처의 mip chain 생성 여부. 기본값은 꺼짐(0)이다.
+    // Tiled 모드는 이 설정 대신 내부 TileManager LOD를 사용한다.
+    D3IV_API D3IV_Result D3IV_CALL D3IV_SetMipMapGenerationEnabled(D3IV_Viewer* viewer, int32_t enable);
+    D3IV_API D3IV_Result D3IV_CALL D3IV_IsMipMapGenerationEnabled(D3IV_Viewer* viewer, int32_t* outEnabled);
+
     // 이미지 1픽셀이 실제로 몇 단위인지. 기본 1px = 1 unit, 단위 "px".
     // Line ROI 의 길이 라벨이 이 값을 적용해 표시한다.
     D3IV_API D3IV_Result D3IV_CALL D3IV_SetPixelScale(D3IV_Viewer* viewer,
