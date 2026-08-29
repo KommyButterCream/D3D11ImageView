@@ -27,6 +27,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "D3D11EngineInterface", "D3D
 		..\D3D11EngineInterface\IUIRenderLayer.h = ..\D3D11EngineInterface\IUIRenderLayer.h
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "D3D11ImageIO", "..\D3D11ImageIO\D3D11ImageIO\D3D11ImageIO.vcxproj", "{CAB1B3EA-0100-4095-B339-CA0D2B237467}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -67,6 +69,14 @@ Global
 		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x64.Build.0 = Release|x64
 		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x86.ActiveCfg = Release|Win32
 		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E}.Release|x86.Build.0 = Release|Win32
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Debug|x64.ActiveCfg = Debug|x64
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Debug|x64.Build.0 = Debug|x64
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Debug|x86.ActiveCfg = Debug|Win32
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Debug|x86.Build.0 = Debug|Win32
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Release|x64.ActiveCfg = Release|x64
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Release|x64.Build.0 = Release|x64
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Release|x86.ActiveCfg = Release|Win32
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -76,6 +86,7 @@ Global
 		{E3BD70C4-FC37-4703-9A54-152FD00BDEA2} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
 		{6DCACA2E-50C3-4152-8EB9-4F7025A9537E} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
 		{B8AE3B4D-2BAC-4250-892E-9C724706AC5C} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
+		{CAB1B3EA-0100-4095-B339-CA0D2B237467} = {C8D5274F-AC00-46C7-1F8D-E88E81087A52}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {FD6DFA0C-D976-40B5-BF94-E4CEDB250DB1}
