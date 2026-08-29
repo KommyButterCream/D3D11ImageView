@@ -648,13 +648,14 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 		struct SaveFormatItem
 		{
 			const wchar_t* text;
+			UICommand command;
 			std::shared_ptr<UIContextMenuButton>* slot;
 		};
 
 		const SaveFormatItem items[] = {
-			{ L"Save to PNG",  &m_saveImagePngButton  },
-			{ L"Save to JPEG", &m_saveImageJpegButton },
-			{ L"Save to BMP",  &m_saveImageBmpButton  },
+			{ L"Save to PNG",  UICommand::SaveImagePng,  &m_saveImagePngButton  },
+			{ L"Save to JPEG", UICommand::SaveImageJpeg, &m_saveImageJpegButton },
+			{ L"Save to BMP",  UICommand::SaveImageBmp,  &m_saveImageBmpButton  },
 		};
 
 		for (const SaveFormatItem& item : items)
@@ -670,6 +671,8 @@ bool UIRenderLayer::InitializeContextMenu(IRenderContext* context, FontManager* 
 			button->SetExtraAreaWidth(10.0f);
 			button->SetText(item.text);
 			button->SetTextStyle(contextMenuButtonTextDefaultStyle);
+			button->SetCommand(item.command);
+			button->SetEventDispatcher(m_uiEventDispatcher);
 
 			m_saveImageSubMenu->AddChild(button);
 			*item.slot = std::move(button);

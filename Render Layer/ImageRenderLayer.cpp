@@ -578,6 +578,16 @@ const Core::ImageType::ImageBase* ImageRenderLayer::GetImage() const
 	return m_image;
 }
 
+ImageInputSource ImageRenderLayer::GetInputSource() const
+{
+	return m_inputSource;
+}
+
+ID3D11Texture2D* ImageRenderLayer::GetSingleTexture() const
+{
+	return m_singleTexture;
+}
+
 bool ImageRenderLayer::CreateDeviceResources()
 {
 	ReleaseDeviceResources();

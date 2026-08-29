@@ -67,6 +67,7 @@ class ImageCenterRenderLayer;
 
 class Camera2D;
 class UIEventDispatcher;
+class D3D11ImageIO;
 
 struct OverlayStyle;
 class RenderThread;
@@ -111,6 +112,22 @@ struct PendingImageUpdate
 		texture = nullptr;
 		sharedHandle = nullptr;
 	}
+};
+
+// 뷰어 내부 전용 메시지.
+//
+// WM_APP 범위는 애플리케이션이 자기 창에 자유롭게 쓸 수 있다. 이 창은
+// 뷰어가 직접 등록한 클래스라 호스트와 겹칠 일이 없다.
+#define WM_D3IV_SAVE_IMAGE (WM_APP + 1)
+
+// 저장 대화상자가 어떤 형식으로 시작할지.
+// 실제 컨테이너는 최종 파일 확장자가 정한다 — 사용자가 대화상자에서
+// 필터를 바꿀 수 있기 때문이다.
+enum class SaveImageFormat
+{
+	Png,
+	Jpeg,
+	Bmp
 };
 
 class D3D11ImageView_Impl : public Core::Window::WindowBase
@@ -304,6 +321,20 @@ public:
 	void ToggleMeasureDistance();
 	bool IsMeasureActive() const;
 
+	// ── 이미지 저장 ──────────────────────────────────────────────────
+	//
+	// 붙어 있는 원본 이미지를 그대로 쓴다. 화면 캡처가 아니라서 줌/팬/ROI 는
+	// 결과에 영향을 주지 않는다.
+	//
+	// 형식은 확장자로 정한다(.png / .jpg / .jpeg / .bmp / .tif). 채널과
+	// 비트깊이는 원본을 따라가고, 컨테이너가 담지 못하는 경우에만 WIC 가
+	// 낮춘다(예: JPEG 는 16bit Gray 를 8bit 로).
+	bool SaveImage(const wchar_t* filePath);
+
+	// 파일 대화상자를 띄우고 사용자가 고른 경로에 저장한다.
+	// 취소하면 false 를 주되 그건 실패가 아니다.
+	bool SaveImageWithDialog(SaveImageFormat format);
+
 	// 테스트용 디바이스 로스트 유발.
 	bool SimulateDeviceLost();
 
@@ -343,6 +374,20 @@ private:
 	std::unique_ptr<UIEventDispatcher> m_uiEventDispatcher = nullptr;
 	static void OnUICommand(UICommand command, void* userData);
 	void HandleUICommand(UICommand command);
+
+	// 저장 대화상자를 마우스 처리 도중에 바로 띄우면 안 된다.
+	//
+	// 모달 대화상자는 자기 메시지 루프를 돌린다. 그러면 지금 우리가 들어와
+	// 있는 OnMouseEvent 안쪽(패널이 m_children 을 순회하는 중)으로 WndProc 이
+	// 다시 들어온다. 메뉴가 그 사이에 닫히면 순회 중인 컨테이너가 바뀐다.
+	//
+	// 그래서 커맨드는 요청만 남기고 PostMessage 로 미룬다. 마우스 처리가
+	// 완전히 빠져나온 뒤 메시지 큐에서 꺼내 대화상자를 연다.
+	void PostSaveImageRequest(SaveImageFormat format);
+	LRESULT OnSaveImageRequested(WPARAM wParam, LPARAM lParam);
+
+	// 원본이 CPU 에 있으면 그대로, 텍스처 입력이면 읽어 내려서 저장한다.
+	bool SaveAttachedImage(const wchar_t* filePath);
 
 	void Zoom(float zoomFactor);
 	void ZoomIn();
@@ -462,6 +507,10 @@ private:
 
 	// 거리 측정 모드. 활성 중에는 좌클릭이 ROI 편집 대신 측정으로 간다.
 	bool m_measureActive = false;
+
+	// WIC 기반 저장기. Initialize 는 실제로 저장할 때 처음 한 번만 한다
+	// (뷰어를 띄우기만 하고 저장을 안 쓰는 호스트가 대부분이다).
+	std::unique_ptr<D3D11ImageIO> m_imageIO = nullptr;
 
 	bool m_showImageCenterLineLayer = false;
 	std::unique_ptr<ImageCenterRenderLayer> m_imageCenterLineLayer = nullptr;

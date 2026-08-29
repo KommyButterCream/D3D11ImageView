@@ -15,6 +15,9 @@
 // UI Event
 
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Event/UIEventDispatcher.h"
+
+// unique_ptr<D3D11ImageIO> 의 소멸자가 여기서 생성된다. 완전한 타입이 필요하다.
+#include "../../../Module/D3D11ImageIO/D3D11ImageIO/D3D11ImageIO.h"
 #include "../../../Module/D3D11UIFramework/D3D11UIFramework/Event/UIEventResult.h"
 
 // Layer
@@ -452,6 +455,19 @@ void D3D11ImageView_Impl::HandleUICommand(UICommand command)
 		break;
 	case UICommand::MeasureDistance:
 		ToggleMeasureDistance();
+		break;
+
+	// 여기서 바로 대화상자를 열면 안 된다. 지금은 마우스 처리 도중이고,
+	// 모달 대화상자가 자기 메시지 루프를 돌리면 그 안으로 다시 들어온다.
+	// 요청만 큐에 넣고 마우스 처리가 끝난 뒤에 연다.
+	case UICommand::SaveImagePng:
+		PostSaveImageRequest(SaveImageFormat::Png);
+		break;
+	case UICommand::SaveImageJpeg:
+		PostSaveImageRequest(SaveImageFormat::Jpeg);
+		break;
+	case UICommand::SaveImageBmp:
+		PostSaveImageRequest(SaveImageFormat::Bmp);
 		break;
 
 	default:

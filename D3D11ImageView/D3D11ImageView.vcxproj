@@ -39,6 +39,7 @@
     <ClCompile Include="..\ROI Renderer\ROIRectangleRenderer.cpp" />
     <ClCompile Include="D3D11ImageViewC.cpp" />
     <ClCompile Include="D3D11ImageView_Impl_Query.cpp" />
+    <ClCompile Include="D3D11ImageView_Impl_Save.cpp" />
     <ClCompile Include="HighResolutionTimer.cpp" />
     <ClCompile Include="D3D11ImageView.cpp" />
     <ClCompile Include="D3D11ImageView_Impl.cpp" />
@@ -97,6 +98,9 @@
     </ProjectReference>
     <ProjectReference Include="..\..\D3D11UIFramework\D3D11UIFramework\D3D11UIFramework.vcxproj">
       <Project>{6dcaca2e-50c3-4152-8eb9-4f7025a9537e}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\D3D11ImageIO\D3D11ImageIO\D3D11ImageIO.vcxproj">
+      <Project>{cab1b3ea-0100-4095-b339-ca0d2b237467}</Project>
     </ProjectReference>
   </ItemGroup>
   <PropertyGroup Label="Globals">

@@ -925,6 +925,11 @@ void D3D11ImageView::ToggleMeasureDistance()
 	}
 }
 
+bool D3D11ImageView::SaveImage(const wchar_t* filePath)
+{
+	return m_impl ? m_impl->SaveImage(filePath) : false;
+}
+
 bool D3D11ImageView::IsMeasureActive() const
 {
 	return m_impl ? m_impl->IsMeasureActive() : false;

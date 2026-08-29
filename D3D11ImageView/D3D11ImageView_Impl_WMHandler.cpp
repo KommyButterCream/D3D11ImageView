@@ -44,6 +44,7 @@ LRESULT D3D11ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_SETCURSOR:		return OnSetCursor(wParam, lParam);
 	case WM_SIZE:			return OnSize(wParam, lParam);
 	case WM_TIMER:			return OnTimer(wParam, lParam);
+	case WM_D3IV_SAVE_IMAGE:	return OnSaveImageRequested(wParam, lParam);
 	}
 
 	return __super::WndProc(message, wParam, lParam);

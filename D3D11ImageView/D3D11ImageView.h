@@ -353,6 +353,22 @@ public:
 	void ToggleMeasureDistance();
 	bool IsMeasureActive() const;
 
+	// 붙어 있는 원본 이미지를 파일로 저장한다.
+	//
+	// 화면 캡처가 아니다. 줌 배율, 팬 위치, ROI, 오버레이는 결과에 들어가지
+	// 않는다. UpdateImage 로 넘긴 그 픽셀이 그대로 나간다.
+	//
+	// 형식은 확장자가 정한다 — .png / .jpg / .jpeg / .bmp / .tif.
+	// 채널과 비트깊이는 원본을 따라간다. 컨테이너가 담지 못하는 조합이면
+	// 가장 가까운 형태로 낮춰서 저장한다(예: JPEG 는 16bit Gray 를 8bit 로).
+	//
+	// 텍스처/공유 텍스처로 붙인 이미지는 CPU 원본이 없으므로 GPU 에서 읽어
+	// 내려 BGRA 로 저장한다.
+	//
+	// 실패하면 false. 이미지가 없거나, 경로를 쓸 수 없거나, 그 조합을
+	// 인코딩할 수 없는 경우다.
+	bool SaveImage(const wchar_t* filePath);
+
 private:
 	// 호스트 콜백. Impl 에는 이 인스턴스를 userData 로 넘기고
 	// .cpp 의 트램폴린이 여기로 되돌린다. 그래야 공개 헤더가 내부

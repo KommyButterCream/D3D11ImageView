@@ -92,6 +92,14 @@ public:
 
 	RenderMode GetRenderMode() const;
 	const Core::ImageType::ImageBase* GetImage() const;
+
+	// 어떤 경로로 이미지가 들어왔는지. 저장할 때 CPU 버퍼를 쓸지
+	// GPU 텍스처를 읽어 내릴지 가르는 데 쓴다.
+	ImageInputSource GetInputSource() const;
+
+	// 텍스처/공유텍스처 입력일 때 실제 픽셀이 들어 있는 텍스처.
+	// RawImage 입력에서는 원본이 CPU 에 있으므로 이걸 쓸 이유가 없다.
+	ID3D11Texture2D* GetSingleTexture() const;
 private:
 	bool CreateDeviceResources();
 	void ReleaseDeviceResources();
