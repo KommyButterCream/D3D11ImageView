@@ -5,11 +5,6 @@
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 
-// Win10 1803 이전 SDK 헤더에는 없다. 값은 winbase.h 정의와 동일.
-#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
-#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
-#endif
-
 RenderThread::RenderThread()
 	: ThreadBase(L"RenderThread")
 {
@@ -33,59 +28,36 @@ bool RenderThread::StartThread()
 	::InterlockedExchange(&m_renderRequested, 0);
 	m_timer.Reset();
 
+	// 고해상도 대기 타이머를 얻지 못했을 때만 의미가 있다.
 	// 실패해도 계속 간다. WaitFrameInterval 이 Sleep 폴백으로 동작한다.
-	CreateFrameTimer();
+	AcquireTimerResolution();
 
 	return Start();
 }
 
-bool RenderThread::CreateFrameTimer()
+void RenderThread::AcquireTimerResolution()
 {
-	if (m_frameTimer)
-		return true;
+	// 정상 경로(고해상도 대기 타이머)는 시스템 타이머 틱과 무관하게 0.5ms
+	// 수준 정밀도가 나온다. 프로세스 타이머 해상도에 의존하지 않으므로
+	// timeBeginPeriod 를 걸 이유가 없다. 걸면 전력만 더 쓴다.
+	if (m_frameTimer.IsHighResolution())
+		return;
 
-	// 고해상도 대기 타이머 시스템 타이머 틱과 무관하게 0.5ms
-	// 수준 정밀도가 나오며, 스핀과 달리 CPU 를 쓰지 않는다.
-	// 자동 리셋(동기화 타이머)이라 대기가 신호를 소비한다.
-	m_frameTimer = ::CreateWaitableTimerExW(
-		nullptr,
-		nullptr,
-		CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
-		TIMER_ALL_ACCESS);
-
-	if (m_frameTimer)
-	{
-		// 정상 경로. 이 타이머는 프로세스 타이머 해상도에 의존하지 않으므로
-		// timeBeginPeriod 를 걸 이유가 없다. 걸면 전력만 더 쓴다.
-		return true;
-	}
-
-	// CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 모드로 생성 실패한 경우에 대한 Fallback
-	// 일반 대기 타이머도, WaitFrameInterval 의 Sleep 경로도 시스템 타이머 틱에
-	// 묶인다(기본 15.6ms). 이때만 프로세스 타이머 해상도를 1ms 로 올린다.
+	// 폴백으로 내려간 경우. 일반 대기 타이머도, WaitFrameInterval 의 Sleep
+	// 경로도 시스템 타이머 틱에 묶인다(기본 15.6ms). 이때만 프로세스 타이머
+	// 해상도를 1ms 로 올린다.
 	// Win10 2004 부터 이 설정은 호출한 프로세스에만 적용된다.
-	m_frameTimer = ::CreateWaitableTimerExW(
-		nullptr, nullptr, 0, TIMER_ALL_ACCESS);
-
+	//
 	// timeBeginPeriod 는 참조 카운트 방식이라 중복 호출하면 그만큼 풀어야 한다.
 	// StartThread 가 여러 번 불려도 한 번만 걸리게 막는다.
 	if (!m_timePeriodSet && ::timeBeginPeriod(1) == TIMERR_NOERROR)
 	{
 		m_timePeriodSet = true;
 	}
-
-	return m_frameTimer != nullptr;
 }
 
-void RenderThread::DestroyFrameTimer()
+void RenderThread::ReleaseTimerResolution()
 {
-	if (m_frameTimer)
-	{
-		::CancelWaitableTimer(m_frameTimer);
-		::CloseHandle(m_frameTimer);
-		m_frameTimer = nullptr;
-	}
-
 	// 폴백 경로에서만 걸었다. 건 만큼만 푼다.
 	if (m_timePeriodSet)
 	{
@@ -117,7 +89,8 @@ void RenderThread::StopThread()
 
 	Join();
 
-	DestroyFrameTimer();
+	m_frameTimer.Cancel();
+	ReleaseTimerResolution();
 }
 
 void RenderThread::SetRenderFPS(double fps)
@@ -212,28 +185,17 @@ void RenderThread::WaitFrameInterval(double waitTime_ms)
 
 	HANDLE stopEvent = GetStopEvent();
 
-	if (m_frameTimer)
+	// 매 프레임 새로 건다. SignalAfter 는 한 번만 신호하므로 남은 대기가
+	// 다음 프레임으로 새지 않는다.
+	if (m_frameTimer.SignalAfter(waitTime_ms))
 	{
-		// 음수 = 상대 시간, 단위는 100ns.
-		LARGE_INTEGER dueTime = {};
-		dueTime.QuadPart = -static_cast<LONGLONG>(waitTime_ms * 10000.0);
-
-		if (dueTime.QuadPart == 0)
-			dueTime.QuadPart = -1;
-
-		if (::SetWaitableTimer(m_frameTimer, &dueTime, 0, nullptr, nullptr, FALSE))
-		{
-			// 타이머와 정지 이벤트를 함께 기다린다. 종료 요청이 오면 남은
-			// 프레임 시간을 낭비하지 않고 바로 깨어난다.
-			HANDLE handles[2] = { m_frameTimer, stopEvent };
-			const DWORD handleCount = stopEvent ? 2u : 1u;
-
-			::WaitForMultipleObjects(handleCount, handles, FALSE, INFINITE);
-			return;
-		}
+		// 타이머와 정지 이벤트를 함께 기다린다. 종료 요청이 오면 남은
+		// 프레임 시간을 낭비하지 않고 바로 깨어난다.
+		m_frameTimer.Wait(stopEvent);
+		return;
 	}
 
-	// 타이머를 못 만든 환경 폴백. 이 경로가 살아 있다는 것은 CreateFrameTimer 가
+	// 타이머를 못 만든 환경 폴백. 이 경로가 살아 있다는 것은 WaitableTimer 가
 	// 고해상도 타이머를 못 얻었다는 뜻이고, 그때 timeBeginPeriod(1) 을 걸어뒀다.
 	const DWORD fallbackWait_ms = static_cast<DWORD>(waitTime_ms + 0.5);
 

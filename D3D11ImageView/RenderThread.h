@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../../Module/Core/Concurrency/ThreadBase.h"
+#include "../../../Module/Core/Concurrency/WaitableTimer.h"
 
 #include "HighResolutionTimer.h"
 
@@ -45,8 +46,9 @@ private:
 	// 다음 프레임까지 대기한다. 대기 중 정지 요청이 오면 즉시 깨어난다.
 	void WaitFrameInterval(double waitTime_ms);
 
-	bool CreateFrameTimer();
-	void DestroyFrameTimer();
+	// 고해상도 대기 타이머를 못 얻은 환경에서만 프로세스 타이머 해상도를 올린다.
+	void AcquireTimerResolution();
+	void ReleaseTimerResolution();
 
 private:
 	RenderFunc m_renderFunc = nullptr;
@@ -70,7 +72,8 @@ private:
 	volatile LONG64 m_frameInterval100ns = 83333;
 
 	// 프레임 페이싱용 대기 타이머. 스핀 없이 1ms 이하 정밀도를 얻는다.
-	HANDLE m_frameTimer = nullptr;
+	// 생성과 고해상도 폴백, 해제는 전부 이 클래스가 들고 있다.
+	Core::Concurrency::WaitableTimer m_frameTimer;
 
 	// 고해상도 대기 타이머를 못 얻어 폴백으로 내려갔을 때만 true.
 	// timeBeginPeriod 를 건 상태인지 나타낸다.
