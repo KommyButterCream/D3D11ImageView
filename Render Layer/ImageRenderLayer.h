@@ -88,6 +88,17 @@ public:
 	bool UpdateTexture(ID3D11Texture2D* texture, uint32_t& width, uint32_t& height);
 	bool UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width, uint32_t& height);
 
+	// --- 공유 프레임 풀 ---
+	//
+	// 생산자(D3D11DuplicateEngine 등)가 슬롯 N개를 돌려쓰는 경우,
+	// 핸들 하나만 캐싱하는 UpdateSharedTexture 로는 매 프레임 캐시가 빗나가
+	// 텍스처를 닫고 다시 열게 된다. 그래서 풀 전체를 한 번만 열어 두고
+	// 이후에는 슬롯 번호만 받는다.
+	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	void UnregisterSharedTexturePool();
+	bool UpdateSharedTexturePoolSlot(uint32_t slot, uint32_t& width, uint32_t& height);
+	uint32_t GetSharedTexturePoolCount() const;
+
 	// Single 모드에서만 mip chain을 생성한다. Tiled 모드는 TileManager의
 	// LOD를 사용하므로 이 설정과 관계없이 single mip chain을 만들지 않는다.
 	// 기본값은 false다.
@@ -151,6 +162,9 @@ private:
 	void ReleaseUnusedModeResources(RenderMode activeMode);
 	bool CreateRawUploadBuffer(uint32_t maxByteSize);
 	bool OpenSharedResource(HANDLE sharedHandle);
+	// 공유 소스 텍스처를 Single 버퍼로 복사한다.
+	// 단일 공유 텍스처와 풀 슬롯이 이 경로를 함께 쓴다.
+	bool CopySharedSourceToSingle(ID3D11Texture2D* source, uint32_t& width, uint32_t& height);
 	void UpdateImageState(ImageInputSource source, uint32_t width, uint32_t height, RenderMode mode, uint32_t channel);
 
 	bool CheckViewChanged();
@@ -272,8 +286,19 @@ private:
 
 	std::vector<GRAPHICS::BatchVertex> m_singleVertices;
 
-	// Shared Resource
+	// Shared Resource (단일 텍스처 경로)
+	// 동기화 없는 입력 전용이다. 키드 뮤텍스를 쓰는 생산자는 풀 경로로 간다.
 	HANDLE m_sharedHandle = nullptr;
 	ID3D11Texture2D* m_sharedTexture = nullptr;
-	IDXGIKeyedMutex* m_sharedKeyedMutex = nullptr;
+
+	// Shared Resource (프레임 풀 경로)
+	//
+	// 등록 시 한 번 열고 UnregisterSharedTexturePool 또는 디바이스 상실
+	// 전까지 계속 들고 있는다. 프레임마다 여는 것은 드라이버 왕복이다.
+	struct SharedPoolSlot
+	{
+		ID3D11Texture2D* texture = nullptr;
+		IDXGIKeyedMutex* keyedMutex = nullptr;
+	};
+	std::vector<SharedPoolSlot> m_sharedPool;
 };

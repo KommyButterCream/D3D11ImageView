@@ -87,7 +87,8 @@ enum class PendingImageUpdateType : uint8_t
 	None,
 	RawImage,
 	Texture,
-	SharedTexture
+	SharedTexture,
+	SharedTexturePoolSlot
 };
 
 struct PendingImageUpdate
@@ -101,6 +102,8 @@ struct PendingImageUpdate
 	uint32_t bitDepth = 8;
 	ID3D11Texture2D* texture = nullptr;
 	HANDLE sharedHandle = nullptr;
+	// 미리 등록해 둔 공유 풀에서 이번에 그릴 슬롯 번호.
+	uint32_t poolSlot = 0;
 
 	void Reset()
 	{
@@ -113,6 +116,7 @@ struct PendingImageUpdate
 		bitDepth = 8;
 		texture = nullptr;
 		sharedHandle = nullptr;
+		poolSlot = 0;
 	}
 };
 
@@ -144,6 +148,11 @@ public:
 	void Finalize();
 
 	HWND GetHWND() const;
+
+	// 창이 닫히기 직전에 호스트에게 알린다. D3D11ImageView::SetCloseHandler 참고.
+	using CloseHandler = void (*)(void* userData);
+	void SetCloseHandler(CloseHandler handler, void* userData);
+
 	ID3D11Device* GetDevice() const;
 	ID3D11DeviceContext* GetDeviceContext() const;
 
@@ -214,6 +223,10 @@ public:
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth = 8);
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
+
+	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	void UnregisterSharedTexturePool();
+	bool UpdateSharedTexturePoolSlot(uint32_t slot);
 
 	// Attach 된 원본 버퍼 참조를 끊는다. 자세한 계약은 D3D11ImageView.h 참조.
 	void DetachImage();
@@ -381,6 +394,7 @@ private:
 
 	LRESULT OnCommand(WPARAM wParam, LPARAM lParam);
 	LRESULT OnCreate(WPARAM wParam, LPARAM lParam);
+	LRESULT OnClose(WPARAM wParam, LPARAM lParam);
 	LRESULT OnDestroy(WPARAM wParam, LPARAM lParam);
 	LRESULT OnEraseBkgnd(WPARAM wParam, LPARAM lParam);
 	LRESULT OnKeyDown(WPARAM wParam, LPARAM lParam);
@@ -459,6 +473,7 @@ private:
 	bool QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth);
 	bool QueueTextureUpdate(ID3D11Texture2D* texture);
 	bool QueueSharedTextureUpdate(HANDLE sharedHandle);
+	bool QueueSharedTexturePoolSlotUpdate(uint32_t slot);
 	bool ApplyPendingImageUpdate();
 
 	static bool CALLBACK RenderCallback(void* param);
@@ -553,6 +568,10 @@ private:
 	std::unique_ptr<UIRenderLayer> m_uiLayer = nullptr;
 
 	PendingImageUpdate m_pendingImageUpdate = {};
+
+	// 창 닫기 통지. 창을 만든 스레드에서만 읽고 쓴다.
+	CloseHandler m_closeHandler = nullptr;
+	void* m_closeUserData = nullptr;
 	bool m_isFinalized = false;
 };
 

@@ -28,6 +28,7 @@ LRESULT D3D11ImageView_Impl::WndProc(UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		//case WM_COMMAND:		return OnCommand(wParam, lParam);
 	case WM_CREATE:			return OnCreate(wParam, lParam);
+	case WM_CLOSE:			return OnClose(wParam, lParam);
 	case WM_DESTROY:		return OnDestroy(wParam, lParam);
 	case WM_ERASEBKGND:		return OnEraseBkgnd(wParam, lParam);
 	case WM_LBUTTONDBLCLK:	return OnLButtonDblClk(wParam, lParam);
@@ -67,6 +68,28 @@ LRESULT D3D11ImageView_Impl::OnCreate(WPARAM wParam, LPARAM lParam)
 {
 
 	return 0L;
+}
+
+// 사용자가 창을 닫으려 한다(닫기 버튼, Alt+F4, 시스템 메뉴).
+//
+// 호스트에게 먼저 알린 뒤 기본 처리로 넘긴다. 순서가 중요하다 — 파괴가
+// 시작되기 전에 알려야 호스트가 프레임 공급을 끊을 기회를 갖는다.
+//
+// 여기서 PostQuitMessage 를 부르지 않는 이유: 이 뷰어는 호스트 창의 자식으로
+// 얹히기도 하는데, 그때 WM_QUIT 를 보내면 호스트의 메시지 루프까지 끝난다.
+// 종료 여부는 호스트가 정할 일이다.
+LRESULT D3D11ImageView_Impl::OnClose(WPARAM wParam, LPARAM lParam)
+{
+	const CloseHandler handler = m_closeHandler;
+	void* const userData = m_closeUserData;
+
+	if (handler)
+	{
+		handler(userData);
+	}
+
+	// DefWindowProc 가 DestroyWindow 를 부른다.
+	return __super::WndProc(WM_CLOSE, wParam, lParam);
 }
 
 LRESULT D3D11ImageView_Impl::OnDestroy(WPARAM wParam, LPARAM lParam)

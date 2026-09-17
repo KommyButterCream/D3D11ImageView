@@ -75,6 +75,14 @@ HWND D3D11ImageView::GetHWND() const
 	return nullptr;
 }
 
+void D3D11ImageView::SetCloseHandler(CloseHandler handler, void* userData)
+{
+	if (m_impl)
+	{
+		m_impl->SetCloseHandler(handler, userData);
+	}
+}
+
 ID3D11Device* D3D11ImageView::GetDevice() const
 {
 	if (m_impl)
@@ -574,6 +582,24 @@ bool D3D11ImageView::UpdateSharedTexture(HANDLE sharedHandle)
 	{
 		return false;
 	}
+}
+
+bool D3D11ImageView::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+{
+	return m_impl ? m_impl->RegisterSharedTexturePool(sharedHandles, count) : false;
+}
+
+void D3D11ImageView::UnregisterSharedTexturePool()
+{
+	if (m_impl)
+	{
+		m_impl->UnregisterSharedTexturePool();
+	}
+}
+
+bool D3D11ImageView::UpdateSharedTexturePoolSlot(uint32_t slot)
+{
+	return m_impl ? m_impl->UpdateSharedTexturePoolSlot(slot) : false;
 }
 void D3D11ImageView::DetachImage()
 {

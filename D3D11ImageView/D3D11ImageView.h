@@ -87,6 +87,20 @@ public:
 	ID3D11Device* GetDevice() const;
 	ID3D11DeviceContext* GetDeviceContext() const;
 
+	// 사용자가 창을 닫으려 할 때(닫기 버튼, Alt+F4) 호출된다.
+	//
+	// 뷰어를 최상위 창으로 띄운 호스트는 이 통지가 없으면 창이 닫힌 사실을
+	// 알 수 없다. 뷰어는 WM_QUIT 를 보내지 않는다 — 자식 창으로 얹힌 경우
+	// 호스트의 메시지 루프를 통째로 끝내 버리기 때문이다.
+	//
+	// 창이 파괴되기 전에, 창을 만든 스레드에서 불린다. 여기서 뷰어로 프레임을
+	// 밀어 넣는 쪽을 먼저 멈추면 정리 순서가 어긋나지 않는다.
+	// 창 메시지 처리 중이므로 오래 붙잡으면 닫기가 그만큼 늦어진다.
+	//
+	// 닫기를 취소하는 수단은 없다. 통지일 뿐이다.
+	using CloseHandler = void (*)(void* userData);
+	void SetCloseHandler(CloseHandler handler, void* userData);
+
 	void RenderLock();
 	void RenderUnLock();
 
@@ -163,6 +177,24 @@ public:
 	bool UpdateImage(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth);
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
+
+	// --- 공유 프레임 풀 ---
+	//
+	// 생산자가 슬롯 N 개를 돌려쓰는 입력용이다. 핸들을 프레임마다 넘기면
+	// 뷰어가 매번 텍스처를 닫고 다시 여는 꼴이 되므로, 풀 전체를 한 번
+	// 등록해 두고 이후에는 슬롯 번호만 넘긴다.
+	//
+	// 핸들은 CreateSharedHandle 로 만든 NT 공유 핸들이어야 하고, 슬롯마다
+	// IDXGIKeyedMutex 가 있어야 한다. 뷰어는 키 0 을 잡고 읽는다.
+	//
+	// 등록은 Initialize 이후에 한 번. 생산자의 디바이스가 다시 만들어졌다면
+	// 이전 핸들은 전부 무효이므로 다시 등록해야 한다.
+	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	void UnregisterSharedTexturePool();
+
+	// 등록된 풀의 slot 번호를 화면에 올린다. 호출 즉시 돌아오며 실제 복사는
+	// 렌더 스레드에서 일어난다 — 반환 후 생산자가 슬롯을 반납해도 된다.
+	bool UpdateSharedTexturePoolSlot(uint32_t slot);
 
 	// UpdateImage 로 넘긴 원본 버퍼 참조를 끊는다.
 	//

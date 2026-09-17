@@ -320,6 +320,15 @@ HWND D3D11ImageView_Impl::GetHWND() const
 	return WindowBase::GetHWND();
 }
 
+// 창을 만든 스레드에서 부르는 것을 전제로 한다. 창 메시지를 처리하는 중에
+// 다른 스레드가 이 값을 갈아치우면 그 자체가 경쟁이다.
+void D3D11ImageView_Impl::SetCloseHandler(CloseHandler handler, void* userData)
+{
+	m_closeUserData = userData;
+	::MemoryBarrier();
+	m_closeHandler = handler;
+}
+
 ID3D11Device* D3D11ImageView_Impl::GetDevice() const
 {
 	return m_renderEngine ? m_renderEngine->GetD3DDevice() : nullptr;

@@ -26,6 +26,50 @@ bool D3D11ImageView_Impl::UpdateSharedTexture(HANDLE sharedHandle)
 	return QueueSharedTextureUpdate(sharedHandle);
 }
 
+// 풀 등록은 렌더 스레드와 배타적으로 한다. 렌더 스레드가 슬롯 배열을 읽는
+// 도중에 그것을 갈아치우면 안 되기 때문이다.
+bool D3D11ImageView_Impl::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+{
+	if (!m_imageLayer || !sharedHandles || count == 0)
+		return false;
+
+	::AcquireSRWLockExclusive(&m_renderLock);
+	const bool result = m_imageLayer->RegisterSharedTexturePool(sharedHandles, count);
+	::ReleaseSRWLockExclusive(&m_renderLock);
+
+	return result;
+}
+
+void D3D11ImageView_Impl::UnregisterSharedTexturePool()
+{
+	if (!m_imageLayer)
+		return;
+
+	::AcquireSRWLockExclusive(&m_renderLock);
+
+	// 아직 적용되지 않은 슬롯 업데이트가 남아 있으면 곧 닫힐 슬롯을
+	// 가리키게 된다. 같이 버린다.
+	::AcquireSRWLockExclusive(&m_pendingImageLock);
+	if (m_pendingImageUpdate.type == PendingImageUpdateType::SharedTexturePoolSlot)
+	{
+		m_pendingImageUpdate.Reset();
+		::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
+	}
+	::ReleaseSRWLockExclusive(&m_pendingImageLock);
+
+	m_imageLayer->UnregisterSharedTexturePool();
+
+	::ReleaseSRWLockExclusive(&m_renderLock);
+}
+
+bool D3D11ImageView_Impl::UpdateSharedTexturePoolSlot(uint32_t slot)
+{
+	if (!m_imageLayer)
+		return false;
+
+	return QueueSharedTexturePoolSlotUpdate(slot);
+}
+
 bool D3D11ImageView_Impl::UpdateTexture(ID3D11Texture2D* texture)
 {
 	if (!m_imageLayer || !texture)
@@ -85,6 +129,27 @@ bool D3D11ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::SharedTexture;
 	m_pendingImageUpdate.sharedHandle = sharedHandle;
+	::ReleaseSRWLockExclusive(&m_pendingImageLock);
+
+	::InterlockedExchange(&m_hasPendingImageUpdate, TRUE);
+	InvalidateFrame();
+
+	return true;
+}
+
+// 대기 슬롯은 하나뿐이라, 렌더 스레드가 따라오지 못하면 앞의 것이 덮인다.
+// 최신 프레임만 보여주면 되는 입력이라 그게 맞는 동작이다.
+//
+// 생산자는 이 호출이 끝나면 슬롯 핸들을 반납해도 된다. 실제 복사는 렌더
+// 스레드에서 일어나지만, 그 사이 생산자가 같은 슬롯을 덮어쓰더라도 키드
+// 뮤텍스가 둘을 갈라 놓는다. 최악의 경우 한 프레임 더 새로운 화면이 나온다.
+bool D3D11ImageView_Impl::QueueSharedTexturePoolSlotUpdate(uint32_t slot)
+{
+	::AcquireSRWLockExclusive(&m_pendingImageLock);
+	SafeRelease(m_pendingImageUpdate.texture);
+	m_pendingImageUpdate.Reset();
+	m_pendingImageUpdate.type = PendingImageUpdateType::SharedTexturePoolSlot;
+	m_pendingImageUpdate.poolSlot = slot;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
 	::InterlockedExchange(&m_hasPendingImageUpdate, TRUE);
@@ -174,6 +239,23 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 		{
 			m_uiLayer->UpdateStatusbarImageSize(width, height);
 		}
+		break;
+	}
+
+	case PendingImageUpdateType::SharedTexturePoolSlot:
+	{
+		uint32_t width = 0;
+		uint32_t height = 0;
+		result = m_imageLayer->UpdateSharedTexturePoolSlot(pendingUpdate.poolSlot, width, height);
+
+		if (m_uiLayer && result)
+		{
+			m_uiLayer->UpdateStatusbarImageSize(width, height);
+		}
+
+		// 뮤텍스를 못 잡아 이번 프레임을 건너뛴 것은 실패가 아니다.
+		// false 를 그대로 올리면 상위가 LUT 재평가까지 건너뛴다.
+		result = true;
 		break;
 	}
 

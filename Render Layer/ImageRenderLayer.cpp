@@ -15,6 +15,9 @@
 
 #include <algorithm>
 
+// OpenSharedResource1 (NT 공유 핸들) 용
+#include <d3d11_1.h>
+
 static const uint16_t kQuadIndices[] = { 0,1,2, 0,2,3 };
 
 // 타일 1장 = 삼각형 2개 = 정점 6개.
@@ -24,9 +27,15 @@ static constexpr uint32_t kVerticesPerTile = 6;
 // 뷰포트/프리페치 계산이 깨졌을 때 버퍼가 무한히 커지는 것을 막는 안전장치다.
 static constexpr uint32_t kMaxTileVertexLimit = 65536;
 
-// D3D11DuplicateEngine의 단일 shared texture 소유권 프로토콜.
-static constexpr UINT64 kCaptureAcquireKey = 0;
-static constexpr UINT64 kViewerAcquireKey = 1;
+// 공유 프레임 풀의 소유권 프로토콜. 키 0 하나만 쓴다.
+// 생산자와 규약이 같아야 하므로 D3D11DuplicateEngine 의 FRAME_POOL_MUTEX_KEY
+// 와 값이 맞아야 한다.
+static constexpr UINT64 kFramePoolAcquireKey = 0;
+
+// 슬롯 하나를 기다리는 상한. 생산자가 뮤텍스를 쥐는 구간은 CopyResource
+// 제출 한 번뿐이라 실제로는 거의 즉시 잡힌다. 이 값은 렌더 스레드가
+// 붙잡히지 않게 하는 안전망이다.
+static constexpr DWORD kFramePoolAcquireTimeout_ms = 8;
 
 static bool CanCopyWholeTexture(const D3D11_TEXTURE2D_DESC& destination,
 	const D3D11_TEXTURE2D_DESC& source)
@@ -615,76 +624,177 @@ bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width,
 	if (!OpenSharedResource(sharedHandle))
 		return false;
 
-	// Keyed mutex가 있는 입력은 캡처 장치가 key 1로 넘긴 프레임만 읽는다.
-	// 일반 shared texture 입력(NVDEC 등)은 기존 호환 경로를 유지한다.
-	bool keyedMutexAcquired = false;
-	if (m_sharedKeyedMutex)
-	{
-		const HRESULT acquireHr = m_sharedKeyedMutex->AcquireSync(kViewerAcquireKey, 0);
-		if (acquireHr == WAIT_TIMEOUT || acquireHr == WAIT_ABANDONED || FAILED(acquireHr))
-			return false;
+	// 이 경로의 입력(NVDEC 등)은 MISC_SHARED 로 만들어져 키드 뮤텍스가 없다.
+	// 동기화를 하는 입력은 RegisterSharedTexturePool 쪽을 쓴다.
+	return CopySharedSourceToSingle(m_sharedTexture, width, height);
+}
 
-		keyedMutexAcquired = true;
+// 생산자가 준 슬롯 핸들을 전부 열어 둔다. 등록 후에는 슬롯 번호만 오간다.
+//
+// 풀 핸들은 CreateSharedHandle 로 만든 NT 핸글이라 OpenSharedResource1 이
+// 필요하다. 구식 OpenSharedResource 는 NT 핸들에 실패한다 — 단일 공유
+// 텍스처 경로가 그 구식 API 를 계속 쓰는 이유이기도 하다.
+//
+// 여기서 연 참조는 우리 것이다. 생산자가 자기 핸들을 닫아도 우리 텍스처는
+// 살아 있다.
+bool ImageRenderLayer::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+{
+	UnregisterSharedTexturePool();
+
+	if (!sharedHandles || count == 0 || !m_device)
+		return false;
+
+	ID3D11Device1* device1 = nullptr;
+	if (FAILED(m_device->QueryInterface(__uuidof(ID3D11Device1), reinterpret_cast<void**>(&device1))) || !device1)
+		return false;
+
+	bool succeeded = true;
+	m_sharedPool.resize(count);
+
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		if (!sharedHandles[i])
+		{
+			succeeded = false;
+			break;
+		}
+
+		HRESULT hr = device1->OpenSharedResource1(
+			sharedHandles[i], __uuidof(ID3D11Texture2D),
+			reinterpret_cast<void**>(&m_sharedPool[i].texture));
+
+		if (FAILED(hr) || !m_sharedPool[i].texture)
+		{
+			succeeded = false;
+			break;
+		}
+
+		// 뮤텍스가 없는 슬롯은 받지 않는다. 생산자가 공유용으로 만들지 않은
+		// 텍스처라는 뜻이고, 동기화 없이 읽으면 찢어진 화면이 나온다.
+		hr = m_sharedPool[i].texture->QueryInterface(
+			__uuidof(IDXGIKeyedMutex), reinterpret_cast<void**>(&m_sharedPool[i].keyedMutex));
+
+		if (FAILED(hr) || !m_sharedPool[i].keyedMutex)
+		{
+			succeeded = false;
+			break;
+		}
 	}
 
-	bool updateSucceeded = false;
-	do
+	SafeRelease(device1);
+
+	if (!succeeded)
 	{
-		D3D11_TEXTURE2D_DESC desc = {};
-		m_sharedTexture->GetDesc(&desc);
-
-		if (desc.Width == 0 || desc.Height == 0 || desc.Width > TileFormat::kMaxTextureDim || desc.Height > TileFormat::kMaxTextureDim)
-			break;
-
-		width = desc.Width;
-		height = desc.Height;
-
-		// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
-		if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM,
-			false, m_mipMapGenerationEnabled))
-			break;
-
-		D3D11_TEXTURE2D_DESC destinationDesc = {};
-		m_singleTexture->GetDesc(&destinationDesc);
-
-		if (CanCopyWholeTexture(destinationDesc, desc))
-		{
-			m_contextD3D->CopyResource(m_singleTexture, m_sharedTexture);
-		}
-		else
-		{
-			m_contextD3D->CopySubresourceRegion(
-				m_singleTexture, 0, 0, 0, 0, m_sharedTexture, 0, nullptr);
-			if (m_mipMapGenerationEnabled)
-			{
-				GenerateSingleMips();
-			}
-		}
-
-		// Shared texture updates do not own CPU image memory.
-		if (m_image)
-		{
-			m_image->ReleaseBuffer();
-			//m_image->Attach(const_cast<uint8_t*>(data), width, height, stride, channel, 8);
-		}
-
-		ReleaseUnusedModeResources(RenderMode::Single);
-
-		// Update camera state only when the image source or size changes.
-		UpdateImageState(ImageInputSource::SharedTexture, width, height, RenderMode::Single, 0);
-		updateSucceeded = true;
-	} while (false);
-
-	if (keyedMutexAcquired)
-	{
-		// Copy 명령을 다른 장치에 넘기기 전에 제출한다. Flush는 비동기이며
-		// GPU 완료 자체는 keyed mutex의 소유권 전환으로 동기화된다.
-		m_contextD3D->Flush();
-		if (FAILED(m_sharedKeyedMutex->ReleaseSync(kCaptureAcquireKey)))
-			return false;
+		// 일부만 열린 풀은 쓸 수 없다. 슬롯 번호로 찾는 구조라 구멍이
+		// 있으면 그 번호가 오는 순간 조용히 화면이 멈춘다.
+		UnregisterSharedTexturePool();
+		return false;
 	}
+
+	return true;
+}
+
+void ImageRenderLayer::UnregisterSharedTexturePool()
+{
+	for (SharedPoolSlot& slot : m_sharedPool)
+	{
+		SafeRelease(slot.keyedMutex);
+		SafeRelease(slot.texture);
+	}
+
+	m_sharedPool.clear();
+}
+
+uint32_t ImageRenderLayer::GetSharedTexturePoolCount() const
+{
+	return static_cast<uint32_t>(m_sharedPool.size());
+}
+
+// 슬롯 하나를 Single 버퍼로 가져온다.
+//
+// 풀은 키 0 하나만 쓴다. 단일 공유 텍스처처럼 0/1 을 핑퐁하지 않는 이유는,
+// 이 풀이 latest-only 로 소비되어 소비자가 손도 대지 않은 프레임이 정상적으로
+// 버려지기 때문이다. 핑퐁이면 그때 키가 한쪽에 걸린 채 슬롯이 죽는다.
+//
+// 못 잡으면 이번 프레임은 건너뛴다. 기다려 봐야 생산자가 그 슬롯에 쓰고 있는
+// 중이고, 곧 더 새로운 프레임이 온다.
+bool ImageRenderLayer::UpdateSharedTexturePoolSlot(uint32_t slot, uint32_t& width, uint32_t& height)
+{
+	if (slot >= m_sharedPool.size())
+		return false;
+
+	SharedPoolSlot& poolSlot = m_sharedPool[slot];
+	if (!poolSlot.texture || !poolSlot.keyedMutex)
+		return false;
+
+	const HRESULT acquireHr = poolSlot.keyedMutex->AcquireSync(
+		kFramePoolAcquireKey, kFramePoolAcquireTimeout_ms);
+
+	if (acquireHr != S_OK)
+		return false;
+
+	const bool updateSucceeded = CopySharedSourceToSingle(poolSlot.texture, width, height);
+
+	// 뮤텍스를 놓기 전에 복사 명령을 제출한다. 놓고 나면 생산자가 이 슬롯에
+	// 덮어쓸 수 있고, 그때까지 우리 복사가 큐에만 있으면 덮어쓴 내용을 읽는다.
+	m_contextD3D->Flush();
+	poolSlot.keyedMutex->ReleaseSync(kFramePoolAcquireKey);
 
 	return updateSucceeded;
+}
+
+// 공유 소스에서 Single 버퍼로 옮기는 공통 부분.
+//
+// 이 텍스처를 읽어도 되는 상태인지는 호출자가 보장한다. 풀 경로는 뮤텍스를
+// 잡고 들어오고, 단일 텍스처 경로는 애초에 동기화 없는 입력이다.
+bool ImageRenderLayer::CopySharedSourceToSingle(ID3D11Texture2D* source, uint32_t& width, uint32_t& height)
+{
+	if (!source || !m_contextD3D)
+		return false;
+
+	D3D11_TEXTURE2D_DESC desc = {};
+	source->GetDesc(&desc);
+
+	if (desc.Width == 0 || desc.Height == 0 || desc.Width > TileFormat::kMaxTextureDim || desc.Height > TileFormat::kMaxTextureDim)
+		return false;
+
+	width = desc.Width;
+	height = desc.Height;
+
+	// 텍스처/공유텍스처 입력은 CopyResource 로 받으므로 CS 가 필요 없다.
+	if (!CreateSingleBuffer(width, height, DXGI_FORMAT_B8G8R8A8_UNORM,
+		false, m_mipMapGenerationEnabled))
+		return false;
+
+	D3D11_TEXTURE2D_DESC destinationDesc = {};
+	m_singleTexture->GetDesc(&destinationDesc);
+
+	if (CanCopyWholeTexture(destinationDesc, desc))
+	{
+		m_contextD3D->CopyResource(m_singleTexture, source);
+	}
+	else
+	{
+		m_contextD3D->CopySubresourceRegion(
+			m_singleTexture, 0, 0, 0, 0, source, 0, nullptr);
+		if (m_mipMapGenerationEnabled)
+		{
+			GenerateSingleMips();
+		}
+	}
+
+	// 공유 텍스처 입력은 CPU 이미지 메모리를 갖지 않는다.
+	if (m_image)
+	{
+		m_image->ReleaseBuffer();
+	}
+
+	ReleaseUnusedModeResources(RenderMode::Single);
+
+	// 소스나 크기가 바뀔 때만 카메라 상태를 갱신한다.
+	UpdateImageState(ImageInputSource::SharedTexture, width, height, RenderMode::Single, 0);
+
+	return true;
 }
 
 void ImageRenderLayer::UpdateImageState(ImageInputSource source, uint32_t width, uint32_t height, RenderMode mode, uint32_t channel)
@@ -928,9 +1038,13 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	SafeRelease(m_rawUploadSRV);
 	SafeRelease(m_singleConvertCB);
 
-	SafeRelease(m_sharedKeyedMutex);
 	SafeRelease(m_sharedTexture);
 	m_sharedHandle = nullptr;
+
+	// 풀 텍스처도 사라진 디바이스 소속이다. 다시 열어 주는 것은 생산자를
+	// 아는 호출자의 몫이라, 여기서는 놓기만 하고 DeviceRestored 이후
+	// RegisterSharedTexturePool 이 다시 불릴 때까지 비워 둔다.
+	UnregisterSharedTexturePool();
 
 	// 지연 생성 리소스의 크기 추적값을 리셋해야 재생성 시 다시 잡힌다.
 	m_singleTextureWidth = 0;
@@ -1494,7 +1608,6 @@ bool ImageRenderLayer::OpenSharedResource(HANDLE sharedHandle)
 
 	if (sharedHandle != m_sharedHandle || m_sharedTexture == nullptr)
 	{
-		SafeRelease(m_sharedKeyedMutex);
 		SafeRelease(m_sharedTexture);
 		m_sharedHandle = nullptr;
 
@@ -1503,10 +1616,6 @@ bool ImageRenderLayer::OpenSharedResource(HANDLE sharedHandle)
 
 		if (SUCCEEDED(hr))
 		{
-			// Legacy shared resources (for example the existing NVDEC path) do not
-			// expose IDXGIKeyedMutex and continue through the unsynchronized path.
-			m_sharedTexture->QueryInterface(
-				__uuidof(IDXGIKeyedMutex), reinterpret_cast<void**>(&m_sharedKeyedMutex));
 			m_sharedHandle = sharedHandle;
 		}
 		else
