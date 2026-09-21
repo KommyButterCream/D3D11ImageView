@@ -64,7 +64,7 @@ public:
 	// ── 거리 측정 도구
 	//
 	// 툴바 버튼이 토글한다. 활성화하면 다음 클릭이 첫 점을 찍고, 두 번째
-	// 점을 찍을 때까지 끝점이 마우스를 따라다닌다(고무줄). 두 번째 클릭으로
+	// 점을 찍을 때까지 끝점이 마우스를 따라다닌다. 두 번째 클릭으로
 	// 확정되면 평범한 Line ROI 로 남아 이후 끝점 드래그가 가능하다.
 	//
 	// 측정선은 한 번에 하나이고 키는 kMeasureKey 다. 버튼을 누를 때마다
@@ -73,14 +73,16 @@ public:
 
 	void BeginMeasure();                                  // 활성화 + 리셋
 	void CancelMeasure();                                 // 해제 + 리셋
-	bool IsMeasureArmed() const;                          // 첫 점을 기다리는 중
-	bool IsMeasureRubber() const;                         // 끝점이 따라다니는 중
+	// 아래 둘은 상태를 그대로 답한다. PlacingPoint 가 true 인 동안에는
+	// 점 하나가 마우스를 따라다니므로 호출자가 MouseMove 를 넘겨줘야 한다.
+	bool IsMeasureAwaitingFirstPoint() const;
+	bool IsMeasurePlacingPoint() const;
 
 	// 측정 모드에서의 클릭. true 면 소비했다는 뜻이고, 두 번째 클릭이었다면
 	// outCompleted 가 true 로 돌아온다(호출자가 모드를 내려야 한다).
 	bool MeasureOnClick(float screenX, float screenY, bool& outCompleted);
 
-	// 고무줄 단계에서 끝점을 마우스 위치로 옮긴다. 화면 갱신이 필요하면 true.
+	// 끝점을 마우스 위치로 옮긴다. 화면 갱신이 필요하면 true.
 	bool MeasureOnMouseMove(float screenX, float screenY);
 
 	// ── 각도 측정 도구
@@ -95,8 +97,8 @@ public:
 
 	void BeginAngle();                                    // 활성화 + 리셋
 	void CancelAngle();                                   // 해제 + 리셋
-	bool IsAngleArmed() const;                            // 첫 점을 기다리는 중
-	bool IsAngleRubber() const;                           // 점이 마우스를 따라오는 중
+	bool IsAngleAwaitingFirstPoint() const;
+	bool IsAnglePlacingPoint() const;
 
 	// 각도 모드에서의 클릭. true 면 소비했다는 뜻이고, 세 번째 클릭이었다면
 	// outCompleted 가 true 로 돌아온다(호출자가 모드를 내려야 한다).
@@ -268,18 +270,18 @@ private:
 	enum class MeasureState : uint8_t
 	{
 		Off = 0,
-		Armed,      // 활성화됨. 첫 점을 기다린다.
-		Rubber      // 첫 점을 찍었다. 끝점이 마우스를 따라간다.
+		AwaitingFirstPoint,   // 활성화됨. 다음 클릭이 첫 점을 찍는다.
+		AwaitingEndPoint      // 첫 점을 찍었다. 끝점이 마우스를 따라간다.
 	};
 	MeasureState m_measureState = MeasureState::Off;
 
-	// 각도 측정 상태. 점을 셋 찍으므로 고무줄 단계가 둘이다.
+	// 각도 측정 상태. 점을 셋 찍으므로 따라다니는 단계가 둘이다.
 	enum class AngleState : uint8_t
 	{
 		Off = 0,
-		Armed,          // 활성화됨. 첫 점을 기다린다.
-		RubberVertex,   // 첫 점을 찍었다. 꼭짓점이 마우스를 따라간다.
-		RubberSecond    // 꼭짓점을 찍었다. 둘째 점이 마우스를 따라간다.
+		AwaitingFirstPoint,   // 활성화됨. 다음 클릭이 첫 점을 찍는다.
+		AwaitingVertex,       // 첫 점을 찍었다. 꼭짓점이 마우스를 따라간다.
+		AwaitingSecondPoint   // 꼭짓점을 찍었다. 둘째 점이 마우스를 따라간다.
 	};
 	AngleState m_angleState = AngleState::Off;
 

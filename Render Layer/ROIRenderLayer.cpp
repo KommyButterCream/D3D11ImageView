@@ -428,7 +428,7 @@ void ROIRenderLayer::BeginMeasure()
 	// 버튼을 누를 때마다 기존 측정선을 지운다(켜든 끄든 리셋).
 	::AcquireSRWLockExclusive(&m_roiLock);
 	RemoveObjectByKey(MeasureKey());
-	m_measureState = MeasureState::Armed;
+	m_measureState = MeasureState::AwaitingFirstPoint;
 	::ReleaseSRWLockExclusive(&m_roiLock);
 }
 
@@ -440,22 +440,22 @@ void ROIRenderLayer::CancelMeasure()
 	::ReleaseSRWLockExclusive(&m_roiLock);
 }
 
-bool ROIRenderLayer::IsMeasureArmed() const
+bool ROIRenderLayer::IsMeasureAwaitingFirstPoint() const
 {
 	::AcquireSRWLockShared(&m_roiLock);
-	const bool armed = (m_measureState == MeasureState::Armed);
+	const bool awaiting = (m_measureState == MeasureState::AwaitingFirstPoint);
 	::ReleaseSRWLockShared(&m_roiLock);
 
-	return armed;
+	return awaiting;
 }
 
-bool ROIRenderLayer::IsMeasureRubber() const
+bool ROIRenderLayer::IsMeasurePlacingPoint() const
 {
 	::AcquireSRWLockShared(&m_roiLock);
-	const bool rubber = (m_measureState == MeasureState::Rubber);
+	const bool placing = (m_measureState == MeasureState::AwaitingEndPoint);
 	::ReleaseSRWLockShared(&m_roiLock);
 
-	return rubber;
+	return placing;
 }
 
 bool ROIRenderLayer::MeasureOnClick(float screenX, float screenY, bool& outCompleted)
@@ -473,9 +473,9 @@ bool ROIRenderLayer::MeasureOnClick(float screenX, float screenY, bool& outCompl
 
 	bool consumed = false;
 
-	if (m_measureState == MeasureState::Armed)
+	if (m_measureState == MeasureState::AwaitingFirstPoint)
 	{
-		// 첫 점. 두 끝점이 겹친 선을 만들고 고무줄 단계로 넘어간다.
+		// 첫 점. 두 끝점이 겹친 선을 만들고 끝점을 마우스에 붙인다.
 		RemoveObjectByKey(MeasureKey());
 
 		auto lineObject = std::make_unique<ROILineRenderer>(MeasureKey());
@@ -488,14 +488,14 @@ bool ROIRenderLayer::MeasureOnClick(float screenX, float screenY, bool& outCompl
 
 		m_selectedObject = raw;
 		m_hoveredObject = raw;
-		m_measureState = MeasureState::Rubber;
+		m_measureState = MeasureState::AwaitingEndPoint;
 
 		QueueEvent(ROIEvent::Selected, raw->GetKey());
 		QueueEvent(ROIEvent::EditBegin, raw->GetKey());
 
 		consumed = true;
 	}
-	else if (m_measureState == MeasureState::Rubber)
+	else if (m_measureState == MeasureState::AwaitingEndPoint)
 	{
 		// 두 번째 점. 여기서 확정하고 모드를 내린다.
 		if (auto* lineObject = static_cast<ROILineRenderer*>(
@@ -530,7 +530,7 @@ bool ROIRenderLayer::MeasureOnMouseMove(float screenX, float screenY)
 
 	bool changed = false;
 
-	if (m_measureState == MeasureState::Rubber)
+	if (m_measureState == MeasureState::AwaitingEndPoint)
 	{
 		if (auto* lineObject = static_cast<ROILineRenderer*>(
 			FindObjectByKey(MeasureKey(), ROIObjectType::Line)))
@@ -570,7 +570,7 @@ void ROIRenderLayer::BeginAngle()
 	// 버튼을 누를 때마다 기존 측정 결과를 지운다(켜든 끄든 리셋).
 	::AcquireSRWLockExclusive(&m_roiLock);
 	RemoveObjectByKey(AngleKey());
-	m_angleState = AngleState::Armed;
+	m_angleState = AngleState::AwaitingFirstPoint;
 	::ReleaseSRWLockExclusive(&m_roiLock);
 }
 
@@ -582,23 +582,23 @@ void ROIRenderLayer::CancelAngle()
 	::ReleaseSRWLockExclusive(&m_roiLock);
 }
 
-bool ROIRenderLayer::IsAngleArmed() const
+bool ROIRenderLayer::IsAngleAwaitingFirstPoint() const
 {
 	::AcquireSRWLockShared(&m_roiLock);
-	const bool armed = (m_angleState == AngleState::Armed);
+	const bool awaiting = (m_angleState == AngleState::AwaitingFirstPoint);
 	::ReleaseSRWLockShared(&m_roiLock);
 
-	return armed;
+	return awaiting;
 }
 
-bool ROIRenderLayer::IsAngleRubber() const
+bool ROIRenderLayer::IsAnglePlacingPoint() const
 {
 	::AcquireSRWLockShared(&m_roiLock);
-	const bool rubber = (m_angleState == AngleState::RubberVertex
-		|| m_angleState == AngleState::RubberSecond);
+	const bool placing = (m_angleState == AngleState::AwaitingVertex
+		|| m_angleState == AngleState::AwaitingSecondPoint);
 	::ReleaseSRWLockShared(&m_roiLock);
 
-	return rubber;
+	return placing;
 }
 
 bool ROIRenderLayer::AngleOnClick(float screenX, float screenY, bool& outCompleted)
@@ -616,9 +616,9 @@ bool ROIRenderLayer::AngleOnClick(float screenX, float screenY, bool& outComplet
 
 	bool consumed = false;
 
-	if (m_angleState == AngleState::Armed)
+	if (m_angleState == AngleState::AwaitingFirstPoint)
 	{
-		// 첫 점. 세 점이 전부 겹친 각을 만들고 고무줄 단계로 넘어간다.
+		// 첫 점. 세 점이 전부 겹친 각을 만들고 꼭짓점을 마우스에 붙인다.
 		RemoveObjectByKey(AngleKey());
 
 		auto angleObject = std::make_unique<ROIAngleRenderer>(AngleKey());
@@ -631,14 +631,14 @@ bool ROIRenderLayer::AngleOnClick(float screenX, float screenY, bool& outComplet
 
 		m_selectedObject = raw;
 		m_hoveredObject = raw;
-		m_angleState = AngleState::RubberVertex;
+		m_angleState = AngleState::AwaitingVertex;
 
 		QueueEvent(ROIEvent::Selected, raw->GetKey());
 		QueueEvent(ROIEvent::EditBegin, raw->GetKey());
 
 		consumed = true;
 	}
-	else if (m_angleState == AngleState::RubberVertex)
+	else if (m_angleState == AngleState::AwaitingVertex)
 	{
 		// 두 번째 점이 꼭짓점이다. 여기서부터 둘째 변이 따라온다.
 		if (auto* angleObject = static_cast<ROIAngleRenderer*>(
@@ -649,10 +649,10 @@ bool ROIRenderLayer::AngleOnClick(float screenX, float screenY, bool& outComplet
 			QueueEvent(ROIEvent::EditChanged, angleObject->GetKey());
 		}
 
-		m_angleState = AngleState::RubberSecond;
+		m_angleState = AngleState::AwaitingSecondPoint;
 		consumed = true;
 	}
-	else if (m_angleState == AngleState::RubberSecond)
+	else if (m_angleState == AngleState::AwaitingSecondPoint)
 	{
 		// 세 번째 점. 여기서 확정하고 모드를 내린다.
 		if (auto* angleObject = static_cast<ROIAngleRenderer*>(
@@ -687,13 +687,13 @@ bool ROIRenderLayer::AngleOnMouseMove(float screenX, float screenY)
 
 	bool changed = false;
 
-	if (m_angleState == AngleState::RubberVertex
-		|| m_angleState == AngleState::RubberSecond)
+	if (m_angleState == AngleState::AwaitingVertex
+		|| m_angleState == AngleState::AwaitingSecondPoint)
 	{
 		if (auto* angleObject = static_cast<ROIAngleRenderer*>(
 			FindObjectByKey(AngleKey(), ROIObjectType::Angle)))
 		{
-			if (m_angleState == AngleState::RubberVertex)
+			if (m_angleState == AngleState::AwaitingVertex)
 			{
 				// 아직 꼭짓점을 못 정했다. 둘째 점도 같이 끌고 다녀야
 				// 변이 하나로 보인다.

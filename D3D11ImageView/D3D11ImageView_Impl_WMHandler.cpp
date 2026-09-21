@@ -370,9 +370,9 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 		return 0L;
 	}
 
-	// 측정 고무줄 단계에서는 끝점이 마우스를 따라간다.
+	// 끝점을 찍기 전까지는 끝점이 마우스를 따라간다.
 	// hover 재계산은 건너뛴다 — 지금 중요한 건 만들고 있는 선뿐이다.
-	if (m_measureActive && m_roiLayer && m_roiLayer->IsMeasureRubber())
+	if (m_measureActive && m_roiLayer && m_roiLayer->IsMeasurePlacingPoint())
 	{
 		if (m_roiLayer->MeasureOnMouseMove(
 			static_cast<float>(mousePosition.x),
@@ -386,7 +386,7 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 	}
 
 	// 각도 측정도 마찬가지다. 아직 안 찍은 점이 마우스를 따라간다.
-	if (m_angleActive && m_roiLayer && m_roiLayer->IsAngleRubber())
+	if (m_angleActive && m_roiLayer && m_roiLayer->IsAnglePlacingPoint())
 	{
 		if (m_roiLayer->AngleOnMouseMove(
 			static_cast<float>(mousePosition.x),
