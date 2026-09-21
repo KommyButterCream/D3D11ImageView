@@ -1,0 +1,53 @@
+﻿<Window x:Class="WpfViewerExample.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewer="clr-namespace:D3D11ImageViewInterop"
+        Title="D3D11ImageView — WPF 최소 예제"
+        Width="1100" Height="750"
+        Background="#FF2B2B2B">
+
+    <!--
+        레이아웃 원칙: 호스트 UI 는 뷰어 영역 "바깥" 에 둔다.
+
+        HwndHost 안의 D3D11 자식 창은 WPF 렌더 트리 밖에서 그려지므로
+        항상 WPF 컨텐츠 위에 올라온다(airspace). 뷰어 위에 올린 버튼이나
+        Popup 은 보이지 않는다. 그래서 컨트롤은 위/아래 행에 배치한다.
+    -->
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 상단 툴바 (호스트 UI) -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <Button Content="Gray 8bit" Padding="10,4" Click="OnGenerateImage" />
+            <Button Content="Gray 16bit" Padding="10,4" Margin="6,0,0,0" Click="OnGenerateImage16" />
+            <Button Content="컬러" Padding="10,4" Margin="6,0,0,0" Click="OnGenerateImageColor" />
+            <Button Content="Zoom Fit" Padding="10,4" Margin="6,0,0,0" Click="OnZoomFit" />
+            <Button Content="1:1" Padding="10,4" Margin="6,0,0,0" Click="OnZoom1To1" />
+            <Button Content="ROI 추가" Padding="10,4" Margin="6,0,0,0" Click="OnAddRoi" />
+            <Button Content="ROI 결과 읽기" Padding="10,4" Margin="6,0,0,0" Click="OnReadRoi" />
+            <Button Content="결함 마커 표시" Padding="10,4" Margin="6,0,0,0" Click="OnAddMarkers" />
+
+            <CheckBox x:Name="UseBuiltInUi" Content="내장 툴바/상태바"
+                      IsChecked="True" VerticalAlignment="Center" Margin="16,0,0,0"
+                      Foreground="White"
+                      Checked="OnBuiltInUiChanged" Unchecked="OnBuiltInUiChanged" />
+        </StackPanel>
+
+        <!-- 뷰어 -->
+        <Border Grid.Row="1" BorderBrush="#FF555555" BorderThickness="1">
+            <viewer:ImageViewHost x:Name="Viewer"
+                                  ViewerCreated="OnViewerCreated"
+                                  ViewerMouseEvent="OnViewerMouse"
+                                  ViewerRoiEvent="OnViewerRoi" />
+        </Border>
+
+        <!-- 상태 표시 (호스트 UI) -->
+        <TextBlock x:Name="StatusText" Grid.Row="2" Margin="0,8,0,0"
+                   Foreground="#FFDDDDDD" FontFamily="Consolas"
+                   Text="테스트 이미지 생성을 눌러 시작하세요." />
+    </Grid>
+</Window>

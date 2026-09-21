@@ -1,0 +1,90 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    x64 고정이 중요하다. AnyCPU 로 두면 32bit 로 떨어져
+    D3D11ImageView.dll(x64) 로드 시 BadImageFormatException 이 난다.
+
+    net8.0-windows / net48 둘 다 동작한다. net48 로 쓰려면
+    TargetFramework 만 net48 로 바꾸면 된다.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <RootNamespace>WpfViewerExample</RootNamespace>
+    <AssemblyName>WpfViewerExample</AssemblyName>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+
+    <!-- 뷰어 빌드 산출물 위치. 다른 곳에 두면 이 값만 바꾸면 된다. -->
+    <ViewerBinDir>$(MSBuildThisFileDirectory)..\..\x64\$(Configuration)\</ViewerBinDir>
+    <ViewerShaderDir>$(MSBuildThisFileDirectory)..\..\Shaders\</ViewerShaderDir>
+
+  </PropertyGroup>
+
+  <!-- 바인딩 소스를 그대로 컴파일에 포함한다. 별도 어셈블리로 빼도 된다. -->
+  <ItemGroup>
+    <Compile Include="..\D3D11ImageView.cs" Link="Interop\D3D11ImageView.cs" />
+    <Compile Include="..\ImageViewHost.cs" Link="Interop\ImageViewHost.cs" />
+  </ItemGroup>
+
+  <!--
+    네이티브 DLL 3종을 출력 폴더로 복사한다.
+    D3D11ImageView.dll 만으로는 부족하다. D3D11Engine.dll 과
+    D3D11UIFramework.dll 이 함께 있어야 로드된다.
+  -->
+  <Target Name="CopyViewerNative" AfterTargets="Build">
+    <ItemGroup>
+      <ViewerNative Include="$(ViewerBinDir)D3D11ImageView.dll" />
+      <ViewerNative Include="$(ViewerBinDir)D3D11Engine.dll" />
+      <ViewerNative Include="$(ViewerBinDir)D3D11UIFramework.dll" />
+
+      <!-- 이미지 저장(WIC). 빠지면 D3D11ImageView.dll 로드 자체가 실패한다. -->
+      <ViewerNative Include="$(ViewerBinDir)D3D11ImageIO.dll" />
+
+      <!-- 있으면 같이. 디버깅 시 콜스택이 보인다. -->
+      <ViewerNative Include="$(ViewerBinDir)*.pdb" />
+    </ItemGroup>
+
+    <Error Condition="!Exists('$(ViewerBinDir)D3D11ImageView.dll')"
+           Text="D3D11ImageView.dll 을 찾을 수 없습니다: $(ViewerBinDir). 먼저 D3D11ImageView.sln 을 x64 로 빌드하세요." />
+
+    <Copy SourceFiles="@(ViewerNative)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    ★ 셰이더는 실행 파일 폴더가 아니라 "CWD 의 상위" 로 간다.
+
+    뷰어가 L"../Shaders/ImageVS.cso" 로 읽기 때문이다. exe 를 그 자리에서
+    실행하면 CWD 가 $(OutDir) 이므로 $(OutDir)..\Shaders\ 에 있어야 한다.
+    빠지면 아무 로그 없이 Initialize 가 실패한다.
+  -->
+  <Target Name="CopyViewerShaders" AfterTargets="Build">
+    <ItemGroup>
+      <ViewerShader Include="$(ViewerShaderDir)*.cso" />
+    </ItemGroup>
+
+    <Error Condition="'@(ViewerShader)' == ''"
+           Text="셰이더(.cso)를 찾을 수 없습니다: $(ViewerShaderDir). 먼저 D3D11ImageView.sln 을 빌드하세요." />
+
+    <Copy SourceFiles="@(ViewerShader)"
+          DestinationFolder="$(OutDir)..\Shaders\"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    아이콘 복사 타깃은 없다.
+
+    뷰어 아이콘은 이제 코드로 그린다(UIIconRenderer). 예전에는 .svg 를
+    "CWD 의 상위" 로 복사해야 했는데, 자산이 이 저장소 밖에 있어서 빠지기
+    쉬웠고 빠져도 조용히 안 그려질 뿐이라 코드 회귀로 오진하게 됐다.
+    실제로 여기서 한 번, TestHost 에서 한 번 그랬다.
+  -->
+
+</Project>
