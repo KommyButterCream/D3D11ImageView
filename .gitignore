@@ -11,5 +11,7 @@ obj/
 *.VC.opendb
 *.bak
 
-# 셰이더 빌드 산출물 (FxCompile 이 $(SolutionDir)Shaders 로 출력)
-/Shaders/
+# 셰이더 빌드 산출물. FxCompile 이 $(SolutionDir)Shaders 로 내보내고,
+# TestHost 처럼 자기 Shaders 폴더를 갖는 하위 프로젝트도 있다.
+# 경로를 고정하지 않아야 둘 다 걸린다.
+Shaders/
