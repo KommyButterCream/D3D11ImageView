@@ -14,6 +14,7 @@
 #include "../Image Tile/TileManager.h"
 
 #include <algorithm>
+#include <string>
 
 // OpenSharedResource1 (NT 공유 핸들) 용
 #include <d3d11_1.h>
@@ -1054,6 +1055,102 @@ void ImageRenderLayer::ReleaseDeviceResources()
 	m_maxByteSize = 0;
 }
 
+// --- 컴파일된 셰이더(.cso) 찾기 ---
+//
+// 예전에는 D3DReadFileToBlob 에 L"../Shaders/X.cso" 를 그대로 넘겼다.
+// 상대 경로는 프로세스의 현재 작업 디렉터리를 기준으로 풀리므로, 이 DLL 이
+// 어디에 있든 상관없이 "호스트가 어느 폴더에서 실행됐는가" 가 결과를 정했다.
+//
+// 그래서 exe 를 자기 출력 폴더에서 실행하면 초기화가 실패했다 —
+// x64\Release 에서 ..\Shaders 는 x64\Shaders 이고 거기엔 아무것도 없다.
+// 프로젝트 폴더에서 F5 로 띄우면 우연히 맞아떨어져서 오래 드러나지 않았고,
+// 증상은 "D3D11ImageView 초기화 실패" 한 줄뿐이라 원인과 거리가 멀었다.
+//
+// 이제는 이 DLL 이 놓인 위치를 기준으로 찾는다. 작업 디렉터리와 무관하다.
+//
+// 후보를 여럿 두는 이유는 배포 형태가 하나가 아니기 때문이다.
+//   <dll>\Shaders\        배포 기본형. DLL 옆에 셰이더를 같이 둔다
+//   <dll>\..\Shaders\     구성 폴더 위에 두는 경우
+//   <dll>\..\..\Shaders\  현재 솔루션 배치 (바이너리가 x64\<Config> 에 있다)
+//
+// 마지막에 예전 경로를 한 번 더 시도한다. 작업 디렉터리를 맞춰 두고 쓰던
+// 호스트(TestHost 가 그렇다)를 이 변경으로 깨뜨리지 않기 위해서다.
+static bool GetOwnModuleDirectory(std::wstring& outDirectory)
+{
+	// 이 함수 자신의 주소로 모듈을 찾는다. exe 가 아니라 이 DLL 이어야 한다.
+	// UNCHANGED_REFCOUNT 를 주는 이유는 참조를 늘리지 않기 위해서다 —
+	// 늘리면 그만큼 FreeLibrary 를 해야 하는데 그럴 자리가 없다.
+	HMODULE module = nullptr;
+	if (!::GetModuleHandleExW(
+			GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+			reinterpret_cast<LPCWSTR>(&GetOwnModuleDirectory), &module) || !module)
+	{
+		return false;
+	}
+
+	// MAX_PATH 를 넘는 경로가 있을 수 있다. 잘린 경로로 파일을 찾으면
+	// 엉뚱한 곳을 보게 되므로 들어갈 때까지 버퍼를 늘린다.
+	std::wstring path(MAX_PATH, L'\0');
+	for (;;)
+	{
+		const DWORD length = ::GetModuleFileNameW(module, path.data(), static_cast<DWORD>(path.size()));
+		if (length == 0)
+			return false;
+
+		if (length < path.size())
+		{
+			path.resize(length);
+			break;
+		}
+
+		if (path.size() >= 32768u)
+			return false;
+
+		path.resize(path.size() * 2);
+	}
+
+	const size_t lastSeparator = path.find_last_of(L"\\/");
+	if (lastSeparator == std::wstring::npos)
+		return false;
+
+	outDirectory.assign(path, 0, lastSeparator + 1);   // 구분자까지 포함한다
+	return true;
+}
+
+static bool ShaderFileExists(const std::wstring& path)
+{
+	const DWORD attributes = ::GetFileAttributesW(path.c_str());
+	return (attributes != INVALID_FILE_ATTRIBUTES) && ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0);
+}
+
+static HRESULT LoadCompiledShader(const wchar_t* fileName, ID3DBlob** outBlob)
+{
+	std::wstring moduleDirectory;
+	if (GetOwnModuleDirectory(moduleDirectory))
+	{
+		static const wchar_t* const kShaderRoots[] =
+		{
+			L"Shaders\\",
+			L"..\\Shaders\\",
+			L"..\\..\\Shaders\\",
+		};
+
+		for (const wchar_t* shaderRoot : kShaderRoots)
+		{
+			const std::wstring candidate = moduleDirectory + shaderRoot + fileName;
+
+			// 존재를 먼저 확인한다. D3DReadFileToBlob 에 없는 경로를 주면
+			// 실패 HRESULT 만 돌아와서 "없는 것" 과 "깨진 것" 이 구분되지 않는다.
+			if (!ShaderFileExists(candidate))
+				continue;
+
+			return ::D3DReadFileToBlob(candidate.c_str(), outBlob);
+		}
+	}
+
+	return ::D3DReadFileToBlob((std::wstring(L"..\\Shaders\\") + fileName).c_str(), outBlob);
+}
+
 bool ImageRenderLayer::CreateShaders()
 {
 	ID3DBlob* vsBlob = nullptr;
@@ -1062,7 +1159,7 @@ bool ImageRenderLayer::CreateShaders()
 	ID3DBlob* errorBlob = nullptr;
 	ID3DBlob* csBlob = nullptr;
 
-	HRESULT hr = ::D3DReadFileToBlob(L"../Shaders/ImageVS.cso", &vsBlob);
+	HRESULT hr = LoadCompiledShader(L"ImageVS.cso", &vsBlob);
 
 	//HRESULT hr = ::D3DCompileFromFile(
 	//	L"ImageVS.hlsl",
@@ -1082,7 +1179,7 @@ bool ImageRenderLayer::CreateShaders()
 		return false;
 	}
 
-	hr = ::D3DReadFileToBlob(L"../Shaders/ImagePS.cso", &psBlob);
+	hr = LoadCompiledShader(L"ImagePS.cso", &psBlob);
 
 	//hr = ::D3DCompileFromFile(
 	//	L"ImagePS.hlsl",
@@ -1103,7 +1200,7 @@ bool ImageRenderLayer::CreateShaders()
 		return false;
 	}
 
-	hr = ::D3DReadFileToBlob(L"../Shaders/WireFramePS.cso", &wirePSBlob);
+	hr = LoadCompiledShader(L"WireFramePS.cso", &wirePSBlob);
 
 	if (FAILED(hr))
 	{
@@ -1118,7 +1215,7 @@ bool ImageRenderLayer::CreateShaders()
 	// 업로드 시점의 4바이트 확장이 불필요해진다.
 	{
 		ID3DBlob* grayPSBlob = nullptr;
-		hr = ::D3DReadFileToBlob(L"../Shaders/ImageGrayPS.cso", &grayPSBlob);
+		hr = LoadCompiledShader(L"ImageGrayPS.cso", &grayPSBlob);
 
 		if (FAILED(hr))
 		{
@@ -1155,7 +1252,7 @@ bool ImageRenderLayer::CreateShaders()
 	// 예전과 완전히 같은 코드로 남으므로 회귀 위험이 없고, 매 픽셀 분기도 없다.
 	{
 		ID3DBlob* grayLutPSBlob = nullptr;
-		hr = ::D3DReadFileToBlob(L"../Shaders/ImageGrayLutPS.cso", &grayLutPSBlob);
+		hr = LoadCompiledShader(L"ImageGrayLutPS.cso", &grayLutPSBlob);
 
 		if (FAILED(hr))
 		{
@@ -1186,7 +1283,7 @@ bool ImageRenderLayer::CreateShaders()
 		}
 	}
 
-	hr = ::D3DReadFileToBlob(L"../Shaders/SingleConvertCS.cso", &csBlob);
+	hr = LoadCompiledShader(L"SingleConvertCS.cso", &csBlob);
 
 	// Create shaders
 	if (SUCCEEDED(hr))
