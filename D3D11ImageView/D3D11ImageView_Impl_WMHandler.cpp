@@ -156,6 +156,13 @@ LRESULT D3D11ImageView_Impl::OnLButtonDblClk(WPARAM wParam, LPARAM lParam)
 {
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
+	// Topmost 로 그린 외부 레이어는 내장 UI 보다 위에 보인다.
+	// 보이는 순서대로 물어봐야 하므로 여기서 먼저 준다.
+	if (HandleMouseEventExternalLayers(UIMouseEventType::LButtonDoubleDown, mousePosition.x, mousePosition.y, true))
+	{
+		return 0L;
+	}
+
 	if (HandleMouseEventUI(UIMouseEventType::LButtonDoubleDown, mousePosition.x, mousePosition.y)
 		!= UIEventResult::None)
 	{
@@ -203,10 +210,22 @@ LRESULT D3D11ImageView_Impl::OnLButtonDown(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
+	// Topmost 로 그린 외부 레이어는 내장 UI 보다 위에 보인다.
+	// 보이는 순서대로 물어봐야 하므로 여기서 먼저 준다.
+	if (HandleMouseEventExternalLayers(UIMouseEventType::LButtonDown, mousePosition.x, mousePosition.y, true))
+	{
+		return 0L;
+	}
+
 	UIEventResult uiEventResult = HandleMouseEventUI(UIMouseEventType::LButtonDown,	mousePosition.x, mousePosition.y);
 
 	if (uiEventResult == UIEventResult::Toolbar ||
 		uiEventResult == UIEventResult::ContextMenu)
+	{
+		return 0L;
+	}
+
+	if (HandleMouseEventExternalLayers(UIMouseEventType::LButtonDown, mousePosition.x, mousePosition.y, false))
 	{
 		return 0L;
 	}
@@ -298,7 +317,19 @@ LRESULT D3D11ImageView_Impl::OnLButtonUp(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
+	// Topmost 로 그린 외부 레이어는 내장 UI 보다 위에 보인다.
+	// 보이는 순서대로 물어봐야 하므로 여기서 먼저 준다.
+	if (HandleMouseEventExternalLayers(UIMouseEventType::LButtonUp, mousePosition.x, mousePosition.y, true))
+	{
+		return 0L;
+	}
+
 	if (HandleMouseEventUI(UIMouseEventType::LButtonUp, mousePosition.x, mousePosition.y) != UIEventResult::None)
+	{
+		return 0L;
+	}
+
+	if (HandleMouseEventExternalLayers(UIMouseEventType::LButtonUp, mousePosition.x, mousePosition.y, false))
 	{
 		return 0L;
 	}
@@ -358,9 +389,21 @@ LRESULT D3D11ImageView_Impl::OnMouseMove(WPARAM wParam, LPARAM lParam)
 		}
 	}
 
+	// Topmost 로 그린 외부 레이어는 내장 UI 보다 위에 보인다.
+	// 보이는 순서대로 물어봐야 하므로 여기서 먼저 준다.
+	if (HandleMouseEventExternalLayers(UIMouseEventType::Move, mousePosition.x, mousePosition.y, true))
+	{
+		return 0L;
+	}
+
 	const UIEventResult uiEventResult = HandleMouseEventUI(UIMouseEventType::Move, mousePosition.x, mousePosition.y);
 
 	if (uiEventResult != UIEventResult::None)
+	{
+		return 0L;
+	}
+
+	if (HandleMouseEventExternalLayers(UIMouseEventType::Move, mousePosition.x, mousePosition.y, false))
 	{
 		return 0L;
 	}
@@ -443,6 +486,8 @@ LRESULT D3D11ImageView_Impl::OnMouseLeave(WPARAM wParam, LPARAM lParam)
 	// UI 요소의 hover 상태를 푼다. 좌표는 창 밖이므로 어떤 요소에도
 	// 맞지 않는 값을 준다.
 	HandleMouseEventUI(UIMouseEventType::Leave, -1, -1);
+	HandleMouseEventExternalLayers(UIMouseEventType::Leave, -1, -1, true);
+	HandleMouseEventExternalLayers(UIMouseEventType::Leave, -1, -1, false);
 
 	if (m_roiLayer)
 	{
@@ -567,10 +612,22 @@ LRESULT D3D11ImageView_Impl::OnRButtonDown(WPARAM wParam, LPARAM lParam)
 
 	const Point2i mousePosition = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
 
+	// Topmost 로 그린 외부 레이어는 내장 UI 보다 위에 보인다.
+	// 보이는 순서대로 물어봐야 하므로 여기서 먼저 준다.
+	if (HandleMouseEventExternalLayers(UIMouseEventType::RButtonDown, mousePosition.x, mousePosition.y, true))
+	{
+		return 0L;
+	}
+
 	if (HandleMouseEventUI(UIMouseEventType::RButtonDown, mousePosition.x, mousePosition.y)
 		!= UIEventResult::None)
 	{
 		//return 0L;
+	}
+
+	if (HandleMouseEventExternalLayers(UIMouseEventType::RButtonDown, mousePosition.x, mousePosition.y, false))
+	{
+		return 0L;
 	}
 
 	if (DispatchMouseEvent(MouseEventType::RButtonDown, mousePosition.x, mousePosition.y))
@@ -607,6 +664,13 @@ LRESULT D3D11ImageView_Impl::OnRButtonUp(WPARAM wParam, LPARAM lParam)
 
 	if (m_rButtonDownInitial == mousePosition)
 	{
+		// Topmost 로 그린 외부 레이어는 내장 UI 보다 위에 보인다.
+		// 보이는 순서대로 물어봐야 하므로 여기서 먼저 준다.
+		if (HandleMouseEventExternalLayers(UIMouseEventType::RButtonUp, mousePosition.x, mousePosition.y, true))
+		{
+			return 0L;
+		}
+
 		if (HandleMouseEventUI(UIMouseEventType::RButtonUp, mousePosition.x, mousePosition.y)
 			!= UIEventResult::None)
 		{

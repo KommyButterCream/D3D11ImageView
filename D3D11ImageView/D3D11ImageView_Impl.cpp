@@ -251,6 +251,11 @@ void D3D11ImageView_Impl::Finalize()
 	if (m_renderThread)
 		m_renderThread->StopThread();
 
+	// 외부 레이어를 먼저 뗀다. 렌더 컨텍스트가 살아 있는 동안 Shutdown 을
+	// 받아야 레이어가 자기 D2D 리소스와 리스너 등록을 정리할 수 있다.
+	ShutdownExternalLayers();
+	SafeRelease(m_externalLayerStateBlock);
+
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	if (m_pendingImageUpdate.texture)
 	{
@@ -389,6 +394,9 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 	// 보장하지 않아 비트맵이 비어 버린다. 그래서 Render 가 아니라 Prepare 다.
 	m_pixelGridLayer->Prepare();
 
+	// 외부 레이어도 프레임 밖에서 준비시킨다. 이유는 선언부 주석 참고.
+	PrepareExternalLayers();
+
 	if (isCameraAnimating || isUiAnimating || m_isDirty != FALSE)
 	{
 		::InterlockedExchange(&m_isDirty, FALSE);
@@ -409,6 +417,8 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 
 		m_renderContext->BeginOverlay();
 
+		RenderExternalLayers(RenderLayerSlot::AboveImage);
+
 		m_overlayLayer->Render();
 
 		m_selectionRectLayer->Render();
@@ -420,6 +430,8 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 
 		m_roiLayer->Render();
 
+		RenderExternalLayers(RenderLayerSlot::AboveROI);
+
 		// 픽셀 격자는 ROI 위, UI 아래.
 		//
 		// 격자는 이미지를 읽기 위한 보조선이라 ROI 에 가리면 쓸모가 없고,
@@ -427,6 +439,8 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 		m_pixelGridLayer->Render();
 
 		m_uiLayer->Render();
+
+		RenderExternalLayers(RenderLayerSlot::Topmost);
 
 		m_renderContext->EndOverlay();
 
@@ -436,6 +450,186 @@ bool D3D11ImageView_Impl::Render(uint64_t frameID, bool resumedFromIdle)
 	::ReleaseSRWLockExclusive(&m_renderLock);
 
 	return isCameraAnimating || isUiAnimating || m_isDirty != FALSE;
+}
+
+// =============================================================================
+// 외부 렌더 레이어
+//
+// 호스트가 자기 UI 를 뷰어 위에 얹는 통로. 뷰어는 무엇이 그려지는지 모른다.
+// 계약은 D3D11ImageView::AddRenderLayer 주석에 적어 두었다.
+// =============================================================================
+
+bool D3D11ImageView_Impl::AddRenderLayer(IRenderLayer* renderLayer, IUIRenderLayer* inputLayer, RenderLayerSlot slot)
+{
+	if (!renderLayer)
+		return false;
+
+	// 렌더 컨텍스트가 있어야 레이어가 D2D 리소스를 만들 수 있다.
+	// Initialize 전에 부르는 것은 순서가 틀린 것이므로 거절한다.
+	if (!m_renderContext)
+		return false;
+
+	RenderLock();
+
+	// 같은 레이어를 두 번 등록하면 두 번 그려지고 Shutdown 도 두 번 불린다.
+	for (const ExternalRenderLayer& entry : m_externalLayers)
+	{
+		if (entry.renderLayer == renderLayer)
+		{
+			RenderUnLock();
+			return false;
+		}
+	}
+
+	if (!renderLayer->Initialize(m_renderContext.get()))
+	{
+		RenderUnLock();
+		return false;
+	}
+
+	ExternalRenderLayer entry = {};
+	entry.renderLayer = renderLayer;
+	entry.inputLayer = inputLayer;
+	entry.slot = slot;
+
+	m_externalLayers.push_back(entry);
+
+	RenderUnLock();
+
+	InvalidateFrame();
+	return true;
+}
+
+void D3D11ImageView_Impl::RemoveRenderLayer(IRenderLayer* renderLayer)
+{
+	if (!renderLayer)
+		return;
+
+	// 락 안에서 떼어낸다. 이 함수가 반환한 뒤에는 렌더 스레드가 이 레이어를
+	// 다시 부르지 않는다는 것이 호스트와의 약속이고, 그래야 호스트가
+	// 안심하고 객체를 지울 수 있다.
+	RenderLock();
+
+	for (size_t index = 0; index < m_externalLayers.size(); ++index)
+	{
+		if (m_externalLayers[index].renderLayer != renderLayer)
+			continue;
+
+		m_externalLayers.erase(m_externalLayers.begin() + index);
+
+		// Shutdown 은 목록에서 뺀 뒤에 부른다. 레이어가 그 안에서 뷰어 API 를
+		// 다시 부르더라도 이미 목록에 없으므로 재진입이 얽히지 않는다.
+		RenderUnLock();
+		renderLayer->Shutdown();
+
+		InvalidateFrame();
+		return;
+	}
+
+	RenderUnLock();
+}
+
+void D3D11ImageView_Impl::ShutdownExternalLayers()
+{
+	// Finalize 경로다. 호스트가 Remove 를 빼먹었더라도 Initialize 의 짝은
+	// 맞춰 준다 — 뷰어가 부른 것은 뷰어가 거둔다.
+	RenderLock();
+	std::vector<ExternalRenderLayer> layers;
+	layers.swap(m_externalLayers);
+	RenderUnLock();
+
+	for (const ExternalRenderLayer& entry : layers)
+	{
+		if (entry.renderLayer)
+		{
+			entry.renderLayer->Shutdown();
+		}
+	}
+}
+
+void D3D11ImageView_Impl::PrepareExternalLayers()
+{
+	for (const ExternalRenderLayer& entry : m_externalLayers)
+	{
+		if (entry.renderLayer)
+		{
+			entry.renderLayer->Prepare();
+		}
+	}
+}
+
+void D3D11ImageView_Impl::RenderExternalLayers(RenderLayerSlot slot)
+{
+	if (m_externalLayers.empty() || !m_renderContext)
+		return;
+
+	ID2D1DeviceContext* d2dContext = m_renderContext->GetD2DDeviceContext();
+	if (!d2dContext)
+		return;
+
+	// 상태 블록은 처음 쓸 때 한 번만 만든다. 외부 레이어를 등록하지 않는
+	// 호스트가 대부분이므로 초기화 시점에 미리 만들 이유가 없다.
+	if (!m_externalLayerStateBlock)
+	{
+		ID2D1Factory* factory = nullptr;
+		d2dContext->GetFactory(&factory);
+		if (!factory)
+			return;
+
+		factory->CreateDrawingStateBlock(&m_externalLayerStateBlock);
+		SafeRelease(factory);
+
+		if (!m_externalLayerStateBlock)
+			return;
+	}
+
+	for (const ExternalRenderLayer& entry : m_externalLayers)
+	{
+		if (entry.slot != slot || !entry.renderLayer)
+			continue;
+
+		// 외부 레이어가 변환이나 클립을 되돌리지 않아도 다음 레이어가
+		// 깨지지 않게 감싼다. 호스트가 규약을 지키기를 바라는 것보다
+		// 여기서 막는 편이 확실하다.
+		d2dContext->SaveDrawingState(m_externalLayerStateBlock);
+
+		entry.renderLayer->Render();
+
+		d2dContext->RestoreDrawingState(m_externalLayerStateBlock);
+	}
+}
+
+bool D3D11ImageView_Impl::HandleMouseEventExternalLayers(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY, bool aboveBuiltInUI)
+{
+	if (m_externalLayers.empty())
+		return false;
+
+	const float x = static_cast<float>(mousePosX);
+	const float y = static_cast<float>(mousePosY);
+
+	// 위에 그려진 것이 먼저 답한다. 그리기는 앞에서 뒤로, 입력은 뒤에서
+	// 앞으로 — 겹쳐 있을 때 눈에 보이는 쪽이 이벤트를 가져가야 한다.
+	for (size_t index = m_externalLayers.size(); index > 0; --index)
+	{
+		const ExternalRenderLayer& entry = m_externalLayers[index - 1];
+		if (!entry.inputLayer || !entry.inputLayer->IsVisible())
+			continue;
+
+		// 이번 차례가 아닌 슬롯은 건너뛴다.
+		const bool entryAboveUI = (entry.slot == RenderLayerSlot::Topmost);
+		if (entryAboveUI != aboveBuiltInUI)
+			continue;
+
+		if (entry.inputLayer->OnMouseEvent(type, x, y))
+		{
+			// 레이어가 화면을 바꿨을 수 있다(hover 하이라이트, 드래그).
+			// 소비했다는 것만으로 다시 그릴 이유는 충분하다.
+			InvalidateFrame();
+			return true;
+		}
+	}
+
+	return false;
 }
 
 UIEventResult D3D11ImageView_Impl::HandleMouseEventUI(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY)

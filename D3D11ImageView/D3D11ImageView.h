@@ -66,8 +66,29 @@ struct ID3D11Device;
 struct ID3D11DeviceContext;
 struct ID3D11Texture2D;
 class D3D11RenderEngine;
+class IRenderLayer;
+class IUIRenderLayer;
 
 class D3D11ImageView_Impl;
+
+// 외부 레이어를 어느 높이에 끼울 것인가.
+//
+// 뷰어가 그리는 순서는 이미지 -> 선택 사각형 -> 오버레이 -> ROI -> 중심선
+// -> 픽셀 격자 -> 내장 UI 다. 그 사이에 호스트 레이어가 들어갈 자리를
+// 세 곳만 연다. 더 잘게 열면 뷰어 내부의 그리기 순서가 그대로 공개 계약이
+// 되어, 레이어를 하나 추가할 때마다 호환이 깨진다.
+enum class RenderLayerSlot : uint32_t
+{
+	// 이미지 바로 위, 뷰어의 오버레이/ROI 아래.
+	// 이미지에 붙는 장식이라 ROI 에 가려도 되는 것.
+	AboveImage = 0,
+
+	// ROI 위, 픽셀 격자 아래.
+	AboveROI,
+
+	// 내장 UI 위. 서비스 컨트롤 바처럼 무엇에도 가리면 안 되는 것.
+	Topmost,
+};
 
 class D3D11_IMAGE_VIEW_API D3D11ImageView
 {
@@ -100,6 +121,45 @@ public:
 	// 닫기를 취소하는 수단은 없다. 통지일 뿐이다.
 	using CloseHandler = void (*)(void* userData);
 	void SetCloseHandler(CloseHandler handler, void* userData);
+
+	// =====================================================================
+	// 외부 렌더 레이어
+	//
+	// 호스트가 자기 UI 를 뷰어 화면 위에 그리게 하는 확장점이다.
+	// 뷰어는 무엇이 그려지는지 모른다 — 서비스마다 달라지는 것은 전부
+	// 호스트 쪽 레이어에 있고, 여기에는 끼우는 자리만 있다.
+	//
+	// 레이어는 뷰어 내부 레이어와 같은 계약을 쓴다(IRenderLayer /
+	// IUIRenderLayer). 새로 배울 인터페이스가 없다.
+	//
+	// 수명
+	//   Add 가 layer->Initialize(renderContext) 를 부르고, Remove 또는
+	//   뷰어 종료가 layer->Shutdown() 을 부른다. 짝을 뷰어가 맞춘다.
+	//
+	//   레이어 객체는 호스트가 소유한다. 반드시 Remove 를 먼저 부르고
+	//   지워야 한다 — 등록된 채로 지우면 렌더 스레드가 죽은 객체를 부른다.
+	//   Remove 는 렌더 락 안에서 떼어내므로, 반환한 뒤에는 그 레이어가
+	//   다시 불리지 않는다.
+	//
+	// 디바이스 로스트와 리사이즈
+	//   레이어가 자기 Initialize 안에서 IRenderContext::AddDeviceListener /
+	//   AddResizeListener 로 직접 등록한다. 뷰어 내부 레이어가 하는 것과
+	//   같은 방식이라 별도 통로를 두지 않는다.
+	//
+	// D2D 상태
+	//   뷰어가 레이어 호출 전후로 그리기 상태를 저장/복원한다. 레이어가
+	//   변환이나 클립을 되돌리지 않아도 다음 레이어가 깨지지 않는다.
+	//   호스트를 믿는 대신 뷰어가 막는 쪽이 맞다.
+	bool AddRenderLayer(IRenderLayer* layer, RenderLayerSlot slot);
+
+	// 그리기에 더해 입력까지 받는 레이어.
+	//
+	// 마우스 이벤트 순서는 내장 UI -> 외부 레이어(Topmost 부터) -> 호스트
+	// 마우스 콜백 -> 측정/ROI -> 팬·줌 이다. 레이어가 true 를 돌려주면
+	// 그 뒤는 실행되지 않는다.
+	bool AddRenderLayer(IUIRenderLayer* layer, RenderLayerSlot slot);
+
+	void RemoveRenderLayer(IRenderLayer* layer);
 
 	void RenderLock();
 	void RenderUnLock();

@@ -2,6 +2,10 @@
 #include "D3D11ImageView.h"
 #include "D3D11ImageView_Impl.h"
 
+// AddRenderLayer 가 IUIRenderLayer* 를 IRenderLayer* 로 올려 넘긴다.
+// 상속 관계를 알아야 하는 변환이라 전방 선언만으로는 부족하다.
+#include "../../../Module/D3D11EngineInterface/IUIRenderLayer.h"
+
 using namespace Core::ShapeType;
 
 #include "../../../Module/Core/ShapeType/Point2i.h"
@@ -101,6 +105,34 @@ ID3D11DeviceContext* D3D11ImageView::GetDeviceContext() const
 	}
 
 	return nullptr;
+}
+
+bool D3D11ImageView::AddRenderLayer(IRenderLayer* layer, RenderLayerSlot slot)
+{
+	if (!m_impl)
+		return false;
+
+	return m_impl->AddRenderLayer(layer, nullptr, slot);
+}
+
+bool D3D11ImageView::AddRenderLayer(IUIRenderLayer* layer, RenderLayerSlot slot)
+{
+	if (!m_impl)
+		return false;
+
+	// 같은 객체를 두 인터페이스로 넘긴다. IUIRenderLayer 가 IRenderLayer 를
+	// 상속하므로 업캐스트는 컴파일러가 보정하는데, 다중 상속이 끼면 두
+	// 포인터의 주소가 다를 수 있다. 그래서 등록 해제 비교는 반드시
+	// IRenderLayer* 쪽으로만 한다.
+	return m_impl->AddRenderLayer(layer, layer, slot);
+}
+
+void D3D11ImageView::RemoveRenderLayer(IRenderLayer* layer)
+{
+	if (m_impl)
+	{
+		m_impl->RemoveRenderLayer(layer);
+	}
 }
 
 void D3D11ImageView::RenderLock()

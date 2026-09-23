@@ -33,6 +33,10 @@
 #include "../Render Layer/ROIRenderLayer.h"
 #include "../Lut/LutTable.h"
 
+// RenderLayerSlot 이 공개 헤더에 있다. 구현이 그 값을 그대로 쓰므로
+// 여기서 정의를 가져온다 — 열거형을 두 곳에 두면 반드시 어긋난다.
+#include "D3D11ImageView.h"
+
 using Core::ImageType::ImageBase;
 using Core::ShapeType::Circle2d;
 using Core::ShapeType::Circle2f;
@@ -59,6 +63,8 @@ using Core::ShapeType::RotatedRect2i;
 class D3D11RenderEngine;
 class D3D11RenderContext;
 class IRenderLayer;
+class IUIRenderLayer;
+struct ID2D1DrawingStateBlock;
 class ImageRenderLayer;
 class SelectionRectRenderLayer;
 
@@ -158,6 +164,15 @@ public:
 
 	void RenderLock() { ::AcquireSRWLockExclusive(&m_renderLock); }
 	void RenderUnLock() { ::ReleaseSRWLockExclusive(&m_renderLock); }
+
+public:
+	// 외부 렌더 레이어. 계약은 D3D11ImageView::AddRenderLayer 주석에 있다.
+	//
+	// 입력을 받지 않는 레이어는 inputLayer 가 nullptr 이다. 두 인자를 따로
+	// 받는 이유는 다중 상속에서 같은 객체라도 인터페이스마다 주소가 다를
+	// 수 있기 때문이다 — 등록 해제 비교는 renderLayer 쪽으로만 한다.
+	bool AddRenderLayer(IRenderLayer* renderLayer, IUIRenderLayer* inputLayer, RenderLayerSlot slot);
+	void RemoveRenderLayer(IRenderLayer* renderLayer);
 
 public:
 	void InvalidateFrame();
@@ -415,6 +430,17 @@ private:
 
 	UIEventResult HandleMouseEventUI(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY);
 
+	// 외부 레이어에 마우스를 물어본다.
+	//
+	// 입력 순서는 그리는 순서의 역순이어야 한다 — 화면에서 위에 보이는
+	// 것이 먼저 답해야 한다. Topmost 슬롯은 내장 UI 위에 그려지므로
+	// 내장 UI 보다 앞서 물어보고, 나머지 슬롯은 그 뒤에 물어본다.
+	//
+	// 이걸 한 번에 처리하면 하단에 겹쳐 놓은 서비스 컨트롤 바가 내장
+	// 상태바에 이벤트를 빼앗긴다. 실제로 볼륨 드래그가 첫 이동 뒤
+	// 끊기는 것으로 드러났다.
+	bool HandleMouseEventExternalLayers(UIMouseEventType type, int32_t mousePosX, int32_t mousePosY, bool aboveBuiltInUI);
+
 	std::unique_ptr<UIEventDispatcher> m_uiEventDispatcher = nullptr;
 	static void OnUICommand(UICommand command, void* userData);
 	void HandleUICommand(UICommand command);
@@ -545,6 +571,41 @@ private:
 	bool m_mipMapGenerationEnabled = false;
 
 	std::vector<IRenderLayer*> m_layers;
+
+	// --- 외부(호스트) 레이어 ---
+	//
+	// 뷰어가 소유하지 않는다. 등록 순서대로 그리고, 같은 슬롯 안에서는
+	// 먼저 등록한 것이 아래에 깔린다.
+	struct ExternalRenderLayer
+	{
+		IRenderLayer* renderLayer = nullptr;
+
+		// 입력을 받지 않는 레이어는 nullptr 이다.
+		IUIRenderLayer* inputLayer = nullptr;
+
+		RenderLayerSlot slot = RenderLayerSlot::Topmost;
+	};
+
+	std::vector<ExternalRenderLayer> m_externalLayers;
+
+	// 외부 레이어가 D2D 상태를 흐트러뜨려도 다음 레이어가 깨지지 않게
+	// 감싸는 데 쓴다. 팩토리에서 한 번만 만들고 재사용한다.
+	ID2D1DrawingStateBlock* m_externalLayerStateBlock = nullptr;
+
+	// 외부 레이어의 Prepare 를 전부 돌린다.
+	//
+	// 반드시 BeginFrame 앞에서 불러야 한다. Prepare 는 오프스크린 타깃에
+	// 미리 그려 두는 자리이고(컨텍스트 메뉴의 그림자 마스크가 그렇다),
+	// D2D 배치 안에서 타깃을 바꾸면 결과를 보장할 수 없다. 뷰어 자체
+	// 레이어(UI, 픽셀 격자)도 같은 이유로 프레임 밖에서 Prepare 한다.
+	void PrepareExternalLayers();
+
+	// 주어진 슬롯의 외부 레이어를 그린다. 상태 저장/복원은 여기서 한다.
+	void RenderExternalLayers(RenderLayerSlot slot);
+
+	// 등록된 외부 레이어를 전부 떼어낸다. 뷰어가 Initialize 에서 불러
+	// 준 Shutdown 의 짝을 여기서 맞춘다.
+	void ShutdownExternalLayers();
 
 	std::unique_ptr<ImageRenderLayer> m_imageLayer = nullptr;
 	std::unique_ptr<SelectionRectRenderLayer> m_selectionRectLayer = nullptr;
