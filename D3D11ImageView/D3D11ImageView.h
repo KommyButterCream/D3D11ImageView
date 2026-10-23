@@ -244,17 +244,27 @@ public:
 	// 뷰어가 매번 텍스처를 닫고 다시 여는 꼴이 되므로, 풀 전체를 한 번
 	// 등록해 두고 이후에는 슬롯 번호만 넘긴다.
 	//
-	// 핸들은 CreateSharedHandle 로 만든 NT 공유 핸들이어야 하고, 슬롯마다
-	// IDXGIKeyedMutex 가 있어야 한다. 뷰어는 키 0 을 잡고 읽는다.
+	// RegisterNtSharedTexturePool은 CreateSharedHandle의 NT 핸들용이고,
+	// RegisterLegacySharedTexturePool은 GetSharedHandle의 일반 공유 핸들용이다.
+	// 두 경로 모두 IDXGIKeyedMutex가 필요하며 생산자/소비자가 키 0을 사용한다.
 	//
 	// 등록은 Initialize 이후에 한 번. 생산자의 디바이스가 다시 만들어졌다면
 	// 이전 핸들은 전부 무효이므로 다시 등록해야 한다.
+	bool RegisterNtSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	// GetSharedHandle handles: borrowed, never CloseHandle. KeyedMutex required.
+	bool RegisterLegacySharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	// Compatibility alias: preserves the original NT-handle contract.
 	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
 	void UnregisterSharedTexturePool();
 
 	// 등록된 풀의 slot 번호를 화면에 올린다. 호출 즉시 돌아오며 실제 복사는
-	// 렌더 스레드에서 일어난다 — 반환 후 생산자가 슬롯을 반납해도 된다.
+	// 렌더 스레드에서 일어난다. 반환 후 생산자가 슬롯을 재사용하면 더 새로운
+	// 내용이 표시될 수 있다(latest-only). 특정 프레임 보존이 필요한 API가 아니다.
 	bool UpdateSharedTexturePoolSlot(uint32_t slot);
+	// On success, takes ownership of a nonblocking release callback. It runs after
+	// GPU copy submission, replacement, reset or shutdown. On false caller retains ownership.
+	// Callback may run on any thread and must not reenter ImageView.
+	bool UpdateSharedTexturePoolSlot(uint32_t slot, void (*release)(void*), void* context);
 
 	// UpdateImage 로 넘긴 원본 버퍼 참조를 끊는다.
 	//

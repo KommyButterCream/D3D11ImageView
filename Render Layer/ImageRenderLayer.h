@@ -94,7 +94,7 @@ public:
 	// 핸들 하나만 캐싱하는 UpdateSharedTexture 로는 매 프레임 캐시가 빗나가
 	// 텍스처를 닫고 다시 열게 된다. 그래서 풀 전체를 한 번만 열어 두고
 	// 이후에는 슬롯 번호만 받는다.
-	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count, bool legacyHandles = false);
 	void UnregisterSharedTexturePool();
 	bool UpdateSharedTexturePoolSlot(uint32_t slot, uint32_t& width, uint32_t& height);
 	uint32_t GetSharedTexturePoolCount() const;
@@ -301,4 +301,6 @@ private:
 		IDXGIKeyedMutex* keyedMutex = nullptr;
 	};
 	std::vector<SharedPoolSlot> m_sharedPool;
+	// Published only after registration completes; querying does not wait for Present.
+	volatile LONG m_publishedSharedPoolCount = 0;
 };

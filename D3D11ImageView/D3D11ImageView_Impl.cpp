@@ -261,6 +261,7 @@ void D3D11ImageView_Impl::Finalize()
 	{
 		m_pendingImageUpdate.texture->Release();
 	}
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);

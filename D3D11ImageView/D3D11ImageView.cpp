@@ -616,9 +616,14 @@ bool D3D11ImageView::UpdateSharedTexture(HANDLE sharedHandle)
 	}
 }
 
+bool D3D11ImageView::RegisterNtSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+{
+	return m_impl ? m_impl->RegisterSharedTexturePool(sharedHandles, count, false) : false;
+}
+
 bool D3D11ImageView::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
 {
-	return m_impl ? m_impl->RegisterSharedTexturePool(sharedHandles, count) : false;
+	return RegisterNtSharedTexturePool(sharedHandles, count);
 }
 
 void D3D11ImageView::UnregisterSharedTexturePool()
@@ -1047,4 +1052,14 @@ void D3D11ImageView::ToggleMeasureAngle()
 bool D3D11ImageView::IsMeasureAngleActive() const
 {
 	return m_impl ? m_impl->IsMeasureAngleActive() : false;
+}
+
+bool D3D11ImageView::RegisterLegacySharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+{
+	return m_impl ? m_impl->RegisterSharedTexturePool(sharedHandles, count, true) : false;
+}
+
+bool D3D11ImageView::UpdateSharedTexturePoolSlot(uint32_t slot, void (*release)(void*), void* context)
+{
+	return m_impl ? m_impl->UpdateSharedTexturePoolSlot(slot, release, context) : false;
 }

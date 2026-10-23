@@ -110,6 +110,9 @@ struct PendingImageUpdate
 	HANDLE sharedHandle = nullptr;
 	// 미리 등록해 둔 공유 풀에서 이번에 그릴 슬롯 번호.
 	uint32_t poolSlot = 0;
+	void (*release)(void*) = nullptr;
+	void* releaseContext = nullptr;
+	void ReleaseLease() { if (release) { auto fn = release; release = nullptr; fn(releaseContext); } }
 
 	void Reset()
 	{
@@ -123,6 +126,8 @@ struct PendingImageUpdate
 		texture = nullptr;
 		sharedHandle = nullptr;
 		poolSlot = 0;
+		release = nullptr;
+		releaseContext = nullptr;
 	}
 };
 
@@ -239,9 +244,9 @@ public:
 	bool UpdateTexture(ID3D11Texture2D* texture);
 	bool UpdateSharedTexture(HANDLE sharedHandle);
 
-	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count);
+	bool RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count, bool legacyHandles = false);
 	void UnregisterSharedTexturePool();
-	bool UpdateSharedTexturePoolSlot(uint32_t slot);
+	bool UpdateSharedTexturePoolSlot(uint32_t slot, void (*release)(void*) = nullptr, void* context = nullptr);
 
 	// Attach 된 원본 버퍼 참조를 끊는다. 자세한 계약은 D3D11ImageView.h 참조.
 	void DetachImage();
@@ -499,7 +504,7 @@ private:
 	bool QueueImageUpdate(const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride, uint32_t channel, uint32_t bitDepth);
 	bool QueueTextureUpdate(ID3D11Texture2D* texture);
 	bool QueueSharedTextureUpdate(HANDLE sharedHandle);
-	bool QueueSharedTexturePoolSlotUpdate(uint32_t slot);
+	bool QueueSharedTexturePoolSlotUpdate(uint32_t slot, void (*release)(void*), void* context);
 	bool ApplyPendingImageUpdate();
 
 	static bool CALLBACK RenderCallback(void* param);

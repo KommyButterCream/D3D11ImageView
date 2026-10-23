@@ -28,13 +28,22 @@ bool D3D11ImageView_Impl::UpdateSharedTexture(HANDLE sharedHandle)
 
 // 풀 등록은 렌더 스레드와 배타적으로 한다. 렌더 스레드가 슬롯 배열을 읽는
 // 도중에 그것을 갈아치우면 안 되기 때문이다.
-bool D3D11ImageView_Impl::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+bool D3D11ImageView_Impl::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count, bool legacyHandles)
 {
 	if (!m_imageLayer || !sharedHandles || count == 0)
 		return false;
 
 	::AcquireSRWLockExclusive(&m_renderLock);
-	const bool result = m_imageLayer->RegisterSharedTexturePool(sharedHandles, count);
+	// Discard a pending slot from the previous pool before replacing its table.
+	::AcquireSRWLockExclusive(&m_pendingImageLock);
+	if (m_pendingImageUpdate.type == PendingImageUpdateType::SharedTexturePoolSlot)
+	{
+		m_pendingImageUpdate.ReleaseLease();
+		m_pendingImageUpdate.Reset();
+		::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
+	}
+	::ReleaseSRWLockExclusive(&m_pendingImageLock);
+	const bool result = m_imageLayer->RegisterSharedTexturePool(sharedHandles, count, legacyHandles);
 	::ReleaseSRWLockExclusive(&m_renderLock);
 
 	return result;
@@ -52,6 +61,7 @@ void D3D11ImageView_Impl::UnregisterSharedTexturePool()
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	if (m_pendingImageUpdate.type == PendingImageUpdateType::SharedTexturePoolSlot)
 	{
+		m_pendingImageUpdate.ReleaseLease();
 		m_pendingImageUpdate.Reset();
 		::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
 	}
@@ -62,12 +72,15 @@ void D3D11ImageView_Impl::UnregisterSharedTexturePool()
 	::ReleaseSRWLockExclusive(&m_renderLock);
 }
 
-bool D3D11ImageView_Impl::UpdateSharedTexturePoolSlot(uint32_t slot)
+bool D3D11ImageView_Impl::UpdateSharedTexturePoolSlot(uint32_t slot, void (*release)(void*), void* context)
 {
 	if (!m_imageLayer)
 		return false;
 
-	return QueueSharedTexturePoolSlotUpdate(slot);
+	// Do not wait for the render lock, which may be held across Present.
+	// A concurrent reset may invalidate this request; the render-side check rejects it.
+	if (slot >= m_imageLayer->GetSharedTexturePoolCount()) return false;
+	return QueueSharedTexturePoolSlotUpdate(slot, release, context);
 }
 
 bool D3D11ImageView_Impl::UpdateTexture(ID3D11Texture2D* texture)
@@ -83,6 +96,7 @@ bool D3D11ImageView_Impl::QueueImageUpdate(const uint8_t* data, uint32_t width, 
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 
 	SafeRelease(m_pendingImageUpdate.texture);
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::RawImage;
 	m_pendingImageUpdate.rawData = data;
@@ -108,6 +122,7 @@ bool D3D11ImageView_Impl::QueueTextureUpdate(ID3D11Texture2D* texture)
 
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	SafeRelease(m_pendingImageUpdate.texture);
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::Texture;
 	m_pendingImageUpdate.texture = texture;
@@ -126,6 +141,7 @@ bool D3D11ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	SafeRelease(m_pendingImageUpdate.texture);
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::SharedTexture;
 	m_pendingImageUpdate.sharedHandle = sharedHandle;
@@ -143,13 +159,16 @@ bool D3D11ImageView_Impl::QueueSharedTextureUpdate(HANDLE sharedHandle)
 // 생산자는 이 호출이 끝나면 슬롯 핸들을 반납해도 된다. 실제 복사는 렌더
 // 스레드에서 일어나지만, 그 사이 생산자가 같은 슬롯을 덮어쓰더라도 키드
 // 뮤텍스가 둘을 갈라 놓는다. 최악의 경우 한 프레임 더 새로운 화면이 나온다.
-bool D3D11ImageView_Impl::QueueSharedTexturePoolSlotUpdate(uint32_t slot)
+bool D3D11ImageView_Impl::QueueSharedTexturePoolSlotUpdate(uint32_t slot, void (*release)(void*), void* context)
 {
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	SafeRelease(m_pendingImageUpdate.texture);
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	m_pendingImageUpdate.type = PendingImageUpdateType::SharedTexturePoolSlot;
 	m_pendingImageUpdate.poolSlot = slot;
+	m_pendingImageUpdate.release = release;
+	m_pendingImageUpdate.releaseContext = context;
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
 	::InterlockedExchange(&m_hasPendingImageUpdate, TRUE);
@@ -171,6 +190,7 @@ void D3D11ImageView_Impl::DetachImage()
 	// 호출자 버퍼를 가리키고 있을 수 있다.
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	SafeRelease(m_pendingImageUpdate.texture);
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	::InterlockedExchange(&m_hasPendingImageUpdate, FALSE);
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
@@ -194,6 +214,8 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 	::AcquireSRWLockExclusive(&m_pendingImageLock);
 	pendingUpdate = std::move(m_pendingImageUpdate);
 	m_pendingImageUpdate.texture = nullptr;
+	m_pendingImageUpdate.release = nullptr;
+	m_pendingImageUpdate.ReleaseLease();
 	m_pendingImageUpdate.Reset();
 	::ReleaseSRWLockExclusive(&m_pendingImageLock);
 
@@ -265,6 +287,7 @@ bool D3D11ImageView_Impl::ApplyPendingImageUpdate()
 		break;
 	}
 
+	pendingUpdate.ReleaseLease();
 	SafeRelease(pendingUpdate.texture);
 
 	// 이미지가 바뀌면 LUT 를 쓸 수 있는지도 바뀐다.

@@ -632,13 +632,12 @@ bool ImageRenderLayer::UpdateSharedTexture(HANDLE sharedHandle, uint32_t& width,
 
 // 생산자가 준 슬롯 핸들을 전부 열어 둔다. 등록 후에는 슬롯 번호만 오간다.
 //
-// 풀 핸들은 CreateSharedHandle 로 만든 NT 핸글이라 OpenSharedResource1 이
-// 필요하다. 구식 OpenSharedResource 는 NT 핸들에 실패한다 — 단일 공유
-// 텍스처 경로가 그 구식 API 를 계속 쓰는 이유이기도 하다.
+// NT 핸들은 OpenSharedResource1, GetSharedHandle의 일반 공유 핸들은
+// OpenSharedResource로 연다. 형식을 명시적으로 받아 두 API를 혼용하지 않는다.
 //
 // 여기서 연 참조는 우리 것이다. 생산자가 자기 핸들을 닫아도 우리 텍스처는
 // 살아 있다.
-bool ImageRenderLayer::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count)
+bool ImageRenderLayer::RegisterSharedTexturePool(const HANDLE* sharedHandles, uint32_t count, bool legacyHandles)
 {
 	UnregisterSharedTexturePool();
 
@@ -646,7 +645,7 @@ bool ImageRenderLayer::RegisterSharedTexturePool(const HANDLE* sharedHandles, ui
 		return false;
 
 	ID3D11Device1* device1 = nullptr;
-	if (FAILED(m_device->QueryInterface(__uuidof(ID3D11Device1), reinterpret_cast<void**>(&device1))) || !device1)
+	if (!legacyHandles && (FAILED(m_device->QueryInterface(__uuidof(ID3D11Device1), reinterpret_cast<void**>(&device1))) || !device1))
 		return false;
 
 	bool succeeded = true;
@@ -660,9 +659,9 @@ bool ImageRenderLayer::RegisterSharedTexturePool(const HANDLE* sharedHandles, ui
 			break;
 		}
 
-		HRESULT hr = device1->OpenSharedResource1(
-			sharedHandles[i], __uuidof(ID3D11Texture2D),
-			reinterpret_cast<void**>(&m_sharedPool[i].texture));
+		HRESULT hr = legacyHandles
+			? m_device->OpenSharedResource(sharedHandles[i], __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&m_sharedPool[i].texture))
+			: device1->OpenSharedResource1(sharedHandles[i], __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&m_sharedPool[i].texture));
 
 		if (FAILED(hr) || !m_sharedPool[i].texture)
 		{
@@ -692,11 +691,13 @@ bool ImageRenderLayer::RegisterSharedTexturePool(const HANDLE* sharedHandles, ui
 		return false;
 	}
 
+	::InterlockedExchange(&m_publishedSharedPoolCount, static_cast<LONG>(count));
 	return true;
 }
 
 void ImageRenderLayer::UnregisterSharedTexturePool()
 {
+	::InterlockedExchange(&m_publishedSharedPoolCount, 0);
 	for (SharedPoolSlot& slot : m_sharedPool)
 	{
 		SafeRelease(slot.keyedMutex);
@@ -708,7 +709,7 @@ void ImageRenderLayer::UnregisterSharedTexturePool()
 
 uint32_t ImageRenderLayer::GetSharedTexturePoolCount() const
 {
-	return static_cast<uint32_t>(m_sharedPool.size());
+	return static_cast<uint32_t>(::ReadAcquire(&m_publishedSharedPoolCount));
 }
 
 // 슬롯 하나를 Single 버퍼로 가져온다.
