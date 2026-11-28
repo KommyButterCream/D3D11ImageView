@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1210" role="img" aria-labelledby="ownership-title"><title id="ownership-title">B. 소유 관계 — Impl이 중심이고 layers가 레이어를 소유</title>
+<defs><marker id="arrow-ownership" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">B. 소유 관계 — Impl이 중심이고 layers가 레이어를 소유</text>
+<text x="32" y="74" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">중첩 박스 = 독점 소유. 점선 = 빌려 쓰는 참조. 기본 구성은 뷰어마다 Engine 1개다.</text>
+<rect x="32" y="103" width="1136" height="100" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="134" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageView</text>
+<text x="50" y="163" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">unique_ptr&lt;ImageViewImpl&gt; impl</text>
+<rect x="32" y="237" width="1136" height="816" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="50" y="268" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageViewImpl</text>
+<text x="50" y="297" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">아래 객체를 소유. 렌더 스레드 종료와 레이어 정리를 마친 뒤 파괴한다.</text>
+<rect x="54" y="319" width="340" height="120" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="72" y="350" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Engine</text>
+<text x="72" y="379" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">unique_ptr&lt;Engine&gt;</text>
+<text x="72" y="404" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">ComRef&lt;T&gt; / 자동 Release</text>
+<rect x="424" y="319" width="340" height="120" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="442" y="350" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Camera</text>
+<text x="442" y="379" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">값 멤버</text>
+<text x="442" y="404" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">center / zoom / velocity</text>
+<rect x="794" y="319" width="352" height="120" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="812" y="350" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">스레드와 예약 상태</text>
+<text x="812" y="379" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">jthread · mutex · 요청 queue</text>
+<text x="812" y="404" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">OS 입력 / capture 상태</text>
+<rect x="54" y="481" width="1092" height="468" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="72" y="512" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">layers : vector&lt;unique_ptr&lt;Layer&gt;&gt;</text>
+<text x="72" y="541" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">레이어의 유일한 소유자. imageLayer / roiLayer 같은 멤버는 검색용 비소유 포인터다.</text>
+<rect x="76" y="566" width="502" height="237" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="94" y="597" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageLayer</text>
+<text x="94" y="626" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">texture: ComRef&lt;T&gt; · CPU 이미지 owner</text>
+<text x="94" y="651" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">등록된 shared slot 목록 + pending frame</text>
+<text x="94" y="676" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">TileCache (대형 이미지일 때 생성)</text>
+<text x="94" y="701" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">  └ tile cache / 작업 queue / worker / 예산</text>
+<text x="94" y="726" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">  └ ImageSource 참조 (메모리 / 영역 읽기)</text>
+<rect x="608" y="566" width="516" height="112" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="626" y="597" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">OverlayLayer</text>
+<text x="626" y="626" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">vector&lt;Shape&gt; + style</text>
+<text x="626" y="651" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">도형 데이터와 공통 그리기 함수</text>
+<rect x="608" y="699" width="516" height="104" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="626" y="730" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ROILayer</text>
+<text x="626" y="759" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">vector&lt;ROI&gt; + 선택/편집 상태</text>
+<text x="626" y="784" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">도형 표시 · hit-test · 작성/수정</text>
+<rect x="76" y="826" width="502" height="99" rx="10" fill="#edf8f3" stroke="#83b7a0" stroke-width="1.5"/>
+<text x="94" y="857" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">UILayer  [필요할 때만 생성]</text>
+<text x="94" y="886" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">버튼 / 메뉴 / 상태바 → 공개 기능 호출</text>
+<rect x="608" y="826" width="516" height="99" rx="10" fill="#edf8f3" stroke="#83b7a0" stroke-width="1.5"/>
+<text x="626" y="857" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">사용자 정의 Layer  [선택]</text>
+<text x="626" y="886" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">그래프 · 차트 · 히트맵 / Render 재정의</text>
+<text x="76" y="999" fill="#2467b3" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="16" font-weight="700">FrameContext = 이번 프레임의 Engine 참조 + Camera 변환 + dt + 크기</text>
+<polyline points="1124,580 1160,580 1160,457 223,457 223,439" fill="none" stroke="#59768d" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-ownership)"/>
+<text x="685" y="477" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">레이어가 Engine을 다시 소유하지 않음</text>
+<text x="32" y="1100" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">CPU 이미지: 복사해서 보관하거나 owner를 함께 유지한다. 비동기 처리에 raw pointer만 남기지 않는다.</text>
+<text x="32" y="1125" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">외부 texture: ComRef::CopyFrom으로 참조를 확보하고 복사 시 AddRef / 소멸 시 Release한다. GPU 사용 lease는 별도로 유지한다.</text>
+<text x="32" y="1150" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">종료: 새 입력 중단 → 타일 작업 취소 → 렌더 중 사용 정리 → 레이어 파괴 → Engine 파괴.</text>
+<text x="32" y="1175" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">HWND는 생성한 UI 스레드에서 닫는다. GPU 자원 정리와 HWND 파괴 순서는 종료 함수에서 조율한다.</text>
+</svg>

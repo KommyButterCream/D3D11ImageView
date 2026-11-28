@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" role="img" aria-labelledby="module-map-title"><title id="module-map-title">A. 전체 구조 — 지금처럼 ImageView · Engine · Layer</title>
+<defs><marker id="arrow-module-map" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">A. 전체 구조 — 지금처럼 ImageView · Engine · Layer</text>
+<rect x="32" y="90" width="1136" height="93" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="121" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">사용 프로그램</text>
+<text x="50" y="150" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">C++ 검사 프로그램 / Streaming App / WPF 라벨링 도구</text>
+<polyline points="600,183 600,221" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="221" width="1136" height="94" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="252" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageView  [공개 API]</text>
+<text x="50" y="281" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">SetImage · SetTexture · RegisterTexturePool · AddLayer · SetZoom · SetUIVisible</text>
+<polyline points="600,315 600,353" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="353" width="1136" height="119" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="384" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageViewImpl  [내부 연결]</text>
+<text x="50" y="413" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">창 메시지 · 렌더 스레드 · 입력 전달 · 레이어 등록/제거</text>
+<text x="50" y="438" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Camera와 Engine을 사용하고, layers 목록을 순서대로 실행한다.</text>
+<polyline points="220,472 220,517" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<polyline points="600,472 600,517" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<polyline points="980,472 980,517" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="517" width="352" height="119" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="548" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Engine</text>
+<text x="50" y="577" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">D3D11 / D2D / font / shader</text>
+<text x="50" y="602" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">frame 시작·종료 / 화면 출력</text>
+<rect x="424" y="517" width="352" height="119" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="442" y="548" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Camera</text>
+<text x="442" y="577" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">좌표 변환 / 줌 / 팬</text>
+<text x="442" y="602" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">애니메이션 / 관성 이동</text>
+<rect x="816" y="517" width="352" height="119" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="834" y="548" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">layers  [그냥 vector]</text>
+<text x="834" y="577" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">vector&lt;unique_ptr&lt;Layer&gt;&gt;</text>
+<text x="834" y="602" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">별도의 목록 관리 클래스 없음</text>
+<polyline points="992,636 992,679" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="679" width="1136" height="164" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="710" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Layer를 상속하는 그리기 단위</text>
+<text x="50" y="739" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">ImageLayer       이미지 / 외부 텍스처 / 공유 풀 / TileCache</text>
+<text x="50" y="764" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">OverlayLayer     읽기 전용 도형 / 텍스트     ·     ROILayer     ROI 표시 / 선택 / 편집</text>
+<text x="50" y="789" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">UILayer (선택)   툴바 / 상태바 / 메뉴       ·     사용자 Layer  차트 / 그래프 / 특수 표시</text>
+<text x="32" y="888" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">화살표는 호출·연결 방향이다. 클래스의 실제 소유자는 다음 그림에 표시한다.</text>
+<text x="32" y="913" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">TileCache만 별도 보조 클래스로 둔다. 타일 작업·캐시·예산은 충분히 큰 독립 기능이기 때문이다.</text>
+</svg>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 850" role="img" aria-labelledby="frame-lifetime-title"><title id="frame-lifetime-title">D. 외부 텍스처 — ImageLayer의 멤버와 함수로 처리</title>
+<defs><marker id="arrow-frame-lifetime" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">D. 외부 텍스처 — ImageLayer의 멤버와 함수로 처리</text>
+<rect x="32" y="100" width="530" height="118" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="131" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">외부 생산자 / Decoder</text>
+<text x="50" y="160" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">원본 texture pool 소유</text>
+<text x="50" y="185" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">쓰기 완료 + slot / generation / sequence 전달</text>
+<rect x="638" y="100" width="530" height="118" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="656" y="131" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageView::SubmitFrame()</text>
+<text x="656" y="160" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Impl이 ImageLayer의 pending 상태에 전달</text>
+<text x="656" y="185" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">accepted는 접수 성공이며 GPU 사용 완료가 아님</text>
+<polyline points="562,160 638,160" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-frame-lifetime)"/>
+<rect x="32" y="278" width="1136" height="355" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="50" y="309" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageLayer</text>
+<text x="50" y="338" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">별도 FrameIngress 서비스 없음</text>
+<rect x="54" y="362" width="342" height="144" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="72" y="393" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">sharedSlots / poolGeneration</text>
+<text x="72" y="422" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">ComRef&lt;T&gt; / 자동 Release</text>
+<text x="72" y="447" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">sync 정보 · format · adapter</text>
+<text x="72" y="472" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">풀 교체 시 generation 변경</text>
+<rect x="429" y="362" width="342" height="144" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="447" y="393" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">optional&lt;PendingFrame&gt;</text>
+<text x="447" y="422" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">slot · sequence · generation</text>
+<text x="447" y="447" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">원본 사용을 유지하는 lease</text>
+<text x="447" y="472" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">덮인 pending도 정확히 1회 반환</text>
+<rect x="804" y="362" width="342" height="144" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="822" y="393" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">표시용 texture</text>
+<text x="822" y="422" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">동기화 후 source를 GPU copy</text>
+<text x="822" y="447" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">화면은 복사본으로 유지</text>
+<text x="822" y="472" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">직접 sampling은 후속 선택</text>
+<polyline points="771,438 804,438" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-frame-lifetime)"/>
+<text x="55" y="555" fill="#2467b3" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="17" font-weight="700">Prepare(): 새 frame 확인 → 읽기 동기화 → GPU copy → 안전한 source 반환</text>
+<text x="55" y="588" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="16" font-weight="400">Render(): 표시용 texture를 그림. source 반환과 실제 화면 표시는 서로 다른 사건이다.</text>
+<rect x="32" y="684" width="1136" height="105" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="715" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">종료 / 풀 교체 / 프레임 drop에도 같은 반환 규칙</text>
+<text x="50" y="744" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">사용하지 않은 frame도 lease를 반환한다. 사용 중인 frame은 마지막 GPU 읽기의 동기화가 보장된 뒤 반환한다.</text>
+</svg>

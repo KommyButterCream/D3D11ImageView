@@ -1,0 +1,15 @@
+.vs/
+Debug/
+Release/
+x64/
+x86/
+bin/
+obj/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.bak
+
+# 셰이더 빌드 산출물. FxCompile 이 $(SolutionDir)Shaders 로 내보내고,
+Shaders/

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 910" role="img" aria-labelledby="thread-map-title"><title id="thread-map-title">C. 실행 흐름 — 별도 Router · Executor 클래스를 만들지 않는다</title>
+<defs><marker id="arrow-thread-map" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">C. 실행 흐름 — 별도 Router · Executor 클래스를 만들지 않는다</text>
+<rect x="32" y="100" width="352" height="652" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="50" y="131" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">UI / 호스트 스레드</text>
+<rect x="424" y="100" width="352" height="652" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="442" y="131" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Impl의 렌더 스레드</text>
+<rect x="816" y="100" width="352" height="652" rx="10" fill="#fff6e7" stroke="#d6b77b" stroke-width="1.5"/>
+<text x="834" y="131" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">TileCache의 작업 스레드</text>
+<rect x="52" y="182" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="70" y="213" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">창 메시지 / 공개 API</text>
+<text x="70" y="242" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">입력 좌표와 시각 정규화</text>
+<text x="70" y="267" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">예약 상태·queue에 저장</text>
+<rect x="444" y="182" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="462" y="213" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">예약 반영</text>
+<text x="462" y="242" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">입력 → UILayer / ROI / Camera</text>
+<text x="462" y="267" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">이미지·설정 변경 반영</text>
+<polyline points="364,245 444,245" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="383" y="230" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">전달</text>
+<rect x="444" y="354" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="462" y="385" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Camera 갱신 / Prepare</text>
+<text x="462" y="414" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">줌·팬·관성 계산</text>
+<text x="462" y="439" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">가시 타일 요청·완료 수거</text>
+<polyline points="600,306 600,354" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<rect x="836" y="354" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="854" y="385" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">타일 읽기·축소</text>
+<text x="854" y="414" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">source owner / revision 유지</text>
+<text x="854" y="439" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">CPU 결과 버퍼 반환</text>
+<polyline points="756,386 836,386" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="775" y="372" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">요청</text>
+<polyline points="836,451 756,451" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="775" y="438" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">결과</text>
+<rect x="444" y="526" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="462" y="557" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">layers 순서대로 Render</text>
+<text x="462" y="586" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Image → Overlay → ROI → UI</text>
+<text x="462" y="611" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Engine::EndFrame에서 출력</text>
+<polyline points="600,478 600,526" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<rect x="52" y="526" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="70" y="557" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">호스트 이벤트 수신</text>
+<text x="70" y="586" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">선택·편집 완료·오류 통지</text>
+<text x="70" y="611" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">WPF는 Dispatcher 사용</text>
+<polyline points="444,588 364,588" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="382" y="573" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">이벤트</text>
+<text x="32" y="801" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">GPU context는 Impl 렌더 스레드에서만 사용한다. 타일 작업은 CPU 버퍼를 만든 뒤 반환한다.</text>
+<text x="32" y="826" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">스레드가 셋이라고 관리 클래스 셋이 필요한 것은 아니다. jthread와 작은 queue를 해당 소유자 안에 둔다.</text>
+<text x="32" y="851" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">렌더할 일이 없으면 대기하고, 입력·새 프레임·타일 도착·애니메이션이 있을 때만 깨어난다.</text>
+</svg>

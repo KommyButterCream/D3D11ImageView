@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D3D11ImageView Next — 단순 구조 설계</title>
+<style>
+:root{--bg:#f2f5f8;--paper:#fff;--ink:#17283c;--muted:#53677d;--line:#dce4ed;--blue:#2259bb;--teal:#087e82;--amber:#935e0d}*{box-sizing:border-box}html{scroll-behavior:auto;scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.8 'Segoe UI','Malgun Gothic',sans-serif}a{color:var(--blue);text-underline-offset:3px}aside{position:fixed;inset:0 auto 0 0;width:252px;padding:28px 20px;background:#12263d;color:#c8d5e6;overflow:auto}aside .brand{font-size:21px;font-weight:750;color:white;line-height:1.35;margin-bottom:20px}aside a{display:block;padding:6px 10px;color:#c8d5e6;text-decoration:none;font-size:13px;border-radius:6px}aside a:hover,aside a.active{background:#254463;color:white}aside small{display:block;color:#8fa9c4;margin:18px 10px}main{max-width:1410px;margin-left:252px;padding:40px 48px 80px}header{background:#15324f;color:white;border-radius:16px;padding:44px 48px;margin-bottom:28px;position:relative;overflow:hidden}header:after{content:'NEXT';position:absolute;right:20px;bottom:-52px;font-size:150px;font-weight:900;color:#ffffff08;pointer-events:none}header .eyebrow{color:#80d7d9;font-size:12px;letter-spacing:2px;font-weight:700}h1{font-size:40px;line-height:1.25;margin:14px 0}header p{max-width:780px;color:#d8e4f0}header .meta{font-size:12px;color:#a4bfd7}.badge{display:inline-block;border:1px solid #60829d;border-radius:30px;padding:3px 12px;font-size:12px;margin:4px 5px 0 0}section{background:white;border:1px solid var(--line);border-radius:12px;padding:30px 34px;margin:22px 0;box-shadow:0 4px 18px #173b5b04}h2{font-size:25px;line-height:1.4;margin:0 0 22px;letter-spacing:-.5px}h2 .n{color:var(--teal);font-size:15px;display:block;letter-spacing:1.5px;margin-bottom:6px}h3{font-size:19px;margin:28px 0 10px}h4{font-size:16px;margin:22px 0 7px}p{margin:10px 0 16px}strong{font-weight:700}ul,ol{padding-left:24px}li{margin:6px 0}.lead{font-size:19px;color:#253f5d}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:20px 0}.two{grid-template-columns:repeat(2,minmax(0,1fr))}.card{border:1px solid var(--line);padding:18px;border-radius:9px;background:#f9fbfe}.card h3{margin:0 0 8px;font-size:17px}.card p{font-size:14px;margin:0}.callout{padding:16px 20px;background:#edf7f7;border-left:4px solid var(--teal);margin:20px 0;border-radius:0 8px 8px 0}.warn{background:#fff6e8;border-color:#c78b2d}.note{font-size:13px;color:var(--muted)}.table{overflow-x:auto;margin:16px 0}table{width:100%;border-collapse:collapse;font-size:14px;min-width:620px}th{text-align:left;background:#edf2f8;color:#29425d}th,td{padding:12px 13px;border:1px solid var(--line);vertical-align:top}td:first-child{font-weight:600}code{font:13px/1.6 Consolas,monospace;background:#eef2f7;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{padding:20px 24px;background:#12263d;color:#dbe9f8;border-radius:9px;overflow-x:auto;line-height:1.7;font-size:13px;white-space:pre;tab-size:2}pre code{background:none;padding:0;color:inherit;overflow-wrap:normal}.flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:20px 0}.flow .step{flex:1;min-width:125px;border:1px solid #bad6e0;background:#f2fafa;border-radius:8px;padding:12px;text-align:center;font-size:14px}.flow .step small{display:block;color:var(--muted);font-size:12px}.flow .arrow{align-self:center;color:var(--teal);font-weight:700}.arch{border:1px solid #c5d7e9;border-radius:10px;padding:18px;background:#f6f9fd}.arch-row{display:flex;gap:10px;margin:9px 0}.arch-box{flex:1;text-align:center;padding:13px 10px;background:white;border:1px solid #bbcee4;border-radius:6px;font-size:14px}.arch-box.core{background:#1d4b74;color:white}.arch-box.opt{background:#edf7f4;border-style:dashed}.arch-down{text-align:center;color:var(--muted);font-size:13px}details{border:1px solid var(--line);border-radius:7px;padding:12px 16px;margin:12px 0}summary{cursor:pointer;font-weight:600}.tag{display:inline-block;font-size:11px;line-height:1.5;padding:3px 7px;border-radius:4px;background:#eaf2ff;color:#2259bb;white-space:nowrap}.tag.risk{background:#fff0d9;color:#83540c}.tag.keep{background:#e7f6ef;color:#186c4a}.evidence td{font-size:13px}.evidence code{font-size:12px}button{border:1px solid #99b1c7;background:white;color:#234667;border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit;font-size:12px}.footer{font-size:13px;color:var(--muted);margin:28px 0}.subtle{color:var(--muted)}@media(max-width:1150px){main{padding:24px;margin-left:220px}aside{width:220px}header{padding:32px}section{padding:24px}.grid{grid-template-columns:1fr}}@media(max-width:780px){aside{position:static;width:auto;max-height:255px}aside .brand{margin:0 0 10px}aside nav{display:grid;grid-template-columns:1fr 1fr}aside small{display:none}main{margin:0;padding:14px}header{padding:26px}h1{font-size:30px}section{padding:20px}.arch-row{flex-direction:column}.flow{flex-direction:column}.flow .arrow{transform:rotate(90deg)}h2{font-size:23px}}@media print{body{background:white;font-size:10pt}aside,button{display:none}main{margin:0;padding:0;max-width:none}header{background:#17324c!important;padding:22px;margin:0 0 15px;print-color-adjust:exact}h1{font-size:27pt}section{box-shadow:none;border:0;border-top:1px solid #aaa;border-radius:0;padding:18px 0;margin:12px 0;break-inside:auto}h2,h3,h4{break-after:avoid}tr,.card,.callout,.flow,.arch{break-inside:avoid}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#edf2f8;color:#17283c}table{min-width:0;font-size:9pt}a{color:inherit}header:after{display:none}.grid{grid-template-columns:repeat(3,1fr)}}
+
+.class-figure{margin:26px 0 34px;border:1px solid #cddae6;border-radius:10px;overflow:hidden;background:#f7f9fc}.class-figure figcaption{padding:13px 18px;background:#eaf0f7;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:15px}.class-figure figcaption a{font-size:12px;white-space:nowrap}.diagram-scroll{overflow-x:auto;padding:8px}.diagram-scroll svg{display:block;width:100%;min-width:850px;height:auto}@media print{.class-figure{break-before:page;break-inside:avoid}.diagram-scroll svg{min-width:0}.diagram-scroll{overflow:visible}.class-figure figcaption a{display:none}}@media(max-width:780px){.class-figure figcaption{align-items:flex-start;flex-direction:column}.diagram-scroll{padding:0}}
+</style>
+</head>
+<body><aside><div class="brand">D3D11ImageView<br><span style="color:#80d7d9">Next / 단순 구조 설계</span></div><nav><a href="#decision">01 ImageView → Impl → Engine + Layer로 시작한다</a><a href="#terms">02 PassList와 FrameIngress는 무슨 의미였나?</a><a href="#architecture">03 주요 클래스는 지금처럼 읽힌다</a><a href="#class-design">04 한 객체를 두 곳에서 소유하지 않는다</a><a href="#flow">05 호출 흐름도 몇 단계면 충분하다</a><a href="#layers">06 커스텀 기능도 기존처럼 Layer로 확장한다</a><a href="#tiles">07 타일은 TileCache 하나로 묶고 내부부터 제대로 만든다</a><a href="#stream">08 공유 텍스처도 ImageLayer의 기능으로 둔다</a><a href="#interaction">09 관성은 Camera에, 편집은 ROILayer에 둔다</a><a href="#ui">10 내장 UI를 선택하고 WPF를 얇게 연결한다</a><a href="#current">11 기존 구조에서 꼭 고칠 부분은 남긴다</a><a href="#delivery">12 직접 타이핑하는 개발 커리큘럼과 예상 시간</a><a href="#evidence">13 현재 코드 근거</a><a href="#sources">14 분석 범위와 참고 자료</a></nav><small>설계 v2 · 2026-11-27<br>ImageView → Impl → Engine + Layer<br>기존 C++ 소스 변경 없음</small></aside><main>
+<header><div class="eyebrow">DESIGN V2 / SIMPLE CLASS STRUCTURE</div><h1>익숙한 구조로 새로 만드는<br>D3D11ImageView</h1><p>ImageView · Impl · Engine · Camera · Layer를 중심으로 구성하고, 타일·공유 텍스처·UI·ROI의 구현을 그 안에 배치한다.</p><span class="badge">기존과 비슷한 호출 흐름</span><span class="badge">선택형 UI</span><span class="badge">타일 / 공유 texture</span><span class="badge">C++20 / WPF</span><p class="meta">분석 기준: ImageView 5294908 · UIFramework 79af8e6 · Engine ee5755e<br>기능별 관리 클래스를 줄인 신규 설계 제안 · 성능 실측 결과가 아님</p></header>
+<section id="decision"><h2><span class="n">01 / SIMPLE DESIGN</span>ImageView → Impl → Engine + Layer로 시작한다</h2>
+<p class="lead"><strong>지금과 비슷한 구조로 충분히 만들 수 있다.</strong> 새 프로젝트에서도 <code>ImageView</code>가 공개 기능을 제공하고, <code>Impl</code>이 창·입력·렌더 흐름을 연결하며, <code>Engine</code>과 <code>Layer</code>가 실제로 그리게 한다.</p>
+<p>앞선 제안은 기능별 책임을 분리하는 것을 구현 클래스의 분리로 너무 많이 옮겼다. 초기 범용 뷰어에 필요한 수준보다 관리 객체가 많았다. 이번 안은 <strong>사용자가 따라갈 호출 경로와 실제 소유 관계가 짧은 구조</strong>를 기준으로 다시 정리했다.</p>
+<div class="grid"><div class="card"><h3>Impl은 연결한다</h3><p>창·스레드·레이어 등록·입력 전달. 이미지 변환이나 도형 편집 알고리즘은 담당 레이어에 둔다.</p></div><div class="card"><h3>Layer는 기능을 가진다</h3><p>이미지는 ImageLayer, ROI는 ROILayer, UI는 UILayer. 관련 데이터와 동작을 가까이 둔다.</p></div><div class="card"><h3>큰 기능만 보조 클래스로</h3><p>타일 처리처럼 상태와 알고리즘이 충분히 큰 기능은 TileCache로 분리한다. 목록·큐마다 관리 클래스를 만들지 않는다.</p></div></div>
+<div class="callout"><strong>바뀌지 않는 목표:</strong> 선택형 UI, 고해상도 타일, 외부 texture/shared pool, 사용자 레이어, 관성 팬, WPF 라벨링 확장. 기능은 그대로 목표로 두고 구현 구조를 단순하게 만든다.</div>
+<p>현재도 C++20 설정이다. 새 코드에서는 RAII·표준 동기화·명확한 메모리 수명·공통 도형 함수를 적용한다. 클래스가 많아야 모던 C++인 것은 아니다.</p>
+<h3>코드 작성·학습 규칙 (2026-11-28 합의)</h3>
+<p>이 프로젝트의 실제 코드와 설명용 예제에서 표준 라이브러리 헤더를 include할 때에는 같은 줄에 <code>// for 사용 이름</code>을 적는다. 여러 이름을 사용하면 함께 나열한다.</p>
+<pre><code>#include &lt;vector&gt;   // for std::vector
+#include &lt;memory&gt;   // for std::unique_ptr, std::make_unique
+#include &lt;utility&gt;  // for std::move, std::exchange</code></pre>
+<p>설명 주석은 모든 줄의 동작을 반복하지 않는다. 헷갈리기 쉬운 동작, 설계 의도, 소유권·수명·동기화처럼 오해하면 문제가 되는 부분에 필요한 만큼 작성한다. 학습용 코드에도 해당 주석을 함께 제시하며, 사용자가 보고 타이핑할 주석을 선택한다.</p>
+<p><strong>확정된 구현 방침: ComPtr는 사용하지 않는다.</strong> COM 참조는 작은 자체 RAII 타입 <code>ComRef&lt;T&gt;</code>로 관리한다. 내부에는 raw pointer 하나를 보관하고 복사 시 AddRef, 소멸 시 Release한다. Attach는 기존 참조를 인수하고 CopyFrom은 참조를 추가한다. Engine과 Layer는 정리 순서를 책임지고, 반복적인 COM 참조 해제는 이 타입이 처리한다.</p>
+</section><section id="terms"><h2><span class="n">02 / TERMINOLOGY</span>PassList와 FrameIngress는 무슨 의미였나?</h2>
+<div class="table"><table><thead><tr><th>이전 이름</th><th>쉽게 말하면</th><th>이번 안에서의 구현</th></tr></thead><tbody>
+<tr><td>PassList</td><td>이번 화면에서 무엇을 어떤 순서로 그릴지 담는 목록. pass는 한 단계의 그리기라는 뜻.</td><td><code>Impl::layers</code>라는 vector. 별도 클래스 없음. 기존 Layer를 순서대로 호출.</td></tr>
+<tr><td>FrameIngress</td><td>외부에서 들어온 영상 frame을 접수하고 최신 frame을 대기시키는 부분. ingress는 유입이라는 뜻.</td><td><code>ImageLayer</code>의 texture 입력 함수, pending frame, shared slot 멤버.</td></tr>
+<tr><td>ViewerSession</td><td>뷰어 하나의 상태와 실행을 묶은 객체.</td><td>익숙한 <code>ImageViewImpl</code>로 유지.</td></tr>
+<tr><td>RenderDeviceSession / RenderExecutor</td><td>GPU 자원과 GPU 명령 실행을 조율하는 객체.</td><td><code>Engine</code> + <code>Impl</code>의 렌더 스레드. 기본은 뷰마다 Engine 하나.</td></tr>
+<tr><td>InputRouter / ToolController</td><td>마우스 입력을 UI·ROI·팬 중 어디로 보낼지 결정.</td><td><code>Impl::HandleInput()</code> 함수와 작은 상태값. ROI 편집 상태는 ROILayer 내부.</td></tr>
+<tr><td>Presenter</td><td>완성된 화면을 창이나 외부 화면에 내보내는 부분.</td><td><code>Engine::EndFrame()</code>과 출력 대상 설정. 별도 상속 계층을 먼저 만들지 않음.</td></tr>
+<tr><td>AnnotationDocument</td><td>라벨 도형 데이터와 변경 이력의 기반.</td><td>초기는 <code>ROILayer::items</code>의 값 데이터. 앱의 저장·Undo는 편집 완료 이벤트로 연결.</td></tr>
+</tbody></table></div>
+<p>위 이름을 외우거나 각각의 클래스를 구현할 필요는 없다. 이번 문서의 나머지 부분과 그림도 아래 단순 구조를 기준으로 통일했다.</p>
+</section><section id="architecture"><h2><span class="n">03 / ARCHITECTURE</span>주요 클래스는 지금처럼 읽힌다</h2><figure class="class-figure"><figcaption><strong>전체 구조</strong><a href="diagrams/module-map.svg" target="_blank" rel="noopener">원본 그림 크게 보기 ↗</a></figcaption><div class="diagram-scroll"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" role="img" aria-labelledby="module-map-title"><title id="module-map-title">A. 전체 구조 — 지금처럼 ImageView · Engine · Layer</title>
+<defs><marker id="arrow-module-map" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">A. 전체 구조 — 지금처럼 ImageView · Engine · Layer</text>
+<rect x="32" y="90" width="1136" height="93" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="121" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">사용 프로그램</text>
+<text x="50" y="150" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">C++ 검사 프로그램 / Streaming App / WPF 라벨링 도구</text>
+<polyline points="600,183 600,221" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="221" width="1136" height="94" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="252" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageView  [공개 API]</text>
+<text x="50" y="281" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">SetImage · SetTexture · RegisterTexturePool · AddLayer · SetZoom · SetUIVisible</text>
+<polyline points="600,315 600,353" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="353" width="1136" height="119" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="384" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageViewImpl  [내부 연결]</text>
+<text x="50" y="413" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">창 메시지 · 렌더 스레드 · 입력 전달 · 레이어 등록/제거</text>
+<text x="50" y="438" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Camera와 Engine을 사용하고, layers 목록을 순서대로 실행한다.</text>
+<polyline points="220,472 220,517" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<polyline points="600,472 600,517" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<polyline points="980,472 980,517" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="517" width="352" height="119" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="548" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Engine</text>
+<text x="50" y="577" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">D3D11 / D2D / font / shader</text>
+<text x="50" y="602" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">frame 시작·종료 / 화면 출력</text>
+<rect x="424" y="517" width="352" height="119" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="442" y="548" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Camera</text>
+<text x="442" y="577" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">좌표 변환 / 줌 / 팬</text>
+<text x="442" y="602" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">애니메이션 / 관성 이동</text>
+<rect x="816" y="517" width="352" height="119" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="834" y="548" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">layers  [그냥 vector]</text>
+<text x="834" y="577" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">vector&lt;unique_ptr&lt;Layer&gt;&gt;</text>
+<text x="834" y="602" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">별도의 목록 관리 클래스 없음</text>
+<polyline points="992,636 992,679" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-module-map)"/>
+<rect x="32" y="679" width="1136" height="164" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="710" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Layer를 상속하는 그리기 단위</text>
+<text x="50" y="739" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">ImageLayer       이미지 / 외부 텍스처 / 공유 풀 / TileCache</text>
+<text x="50" y="764" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">OverlayLayer     읽기 전용 도형 / 텍스트     ·     ROILayer     ROI 표시 / 선택 / 편집</text>
+<text x="50" y="789" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">UILayer (선택)   툴바 / 상태바 / 메뉴       ·     사용자 Layer  차트 / 그래프 / 특수 표시</text>
+<text x="32" y="888" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">화살표는 호출·연결 방향이다. 클래스의 실제 소유자는 다음 그림에 표시한다.</text>
+<text x="32" y="913" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">TileCache만 별도 보조 클래스로 둔다. 타일 작업·캐시·예산은 충분히 큰 독립 기능이기 때문이다.</text>
+</svg></div></figure>
+<div class="table"><table><thead><tr><th>클래스</th><th>담당 기능</th><th>여기에 넣지 않을 것</th></tr></thead><tbody>
+<tr><td>ImageView</td><td>앱이 사용하는 공개 API. 구현 포인터 보관.</td><td>타일·D3D 세부 처리와 위젯 구성.</td></tr>
+<tr><td>ImageViewImpl</td><td>창, 스레드, 입력 전달, 레이어 목록, 종료 순서.</td><td>타일 샘플링·GPU format 변환·ROI별 드래그 계산.</td></tr>
+<tr><td>Engine</td><td>D3D11/D2D/DirectWrite, frame 시작·끝, 출력, device 복구.</td><td>ROI 종류, 선택된 도구, 툴바 버튼의 의미.</td></tr>
+<tr><td>Camera</td><td>좌표 변환, 줌·팬, fit, animation, 관성.</td><td>WndProc, 메뉴, texture pool.</td></tr>
+<tr><td>ImageLayer</td><td>단일 이미지·외부 texture·shared pool의 표시와 수명.</td><td>데이터셋·네트워크 프로토콜·NVDEC 자체.</td></tr>
+<tr><td>OverlayLayer</td><td>읽기 전용 선·도형·텍스트. 이미지/화면 좌표 선택.</td><td>선택·편집 상태.</td></tr>
+<tr><td>ROILayer</td><td>ROI 데이터, 표시, hit-test, 선택·작성·편집.</td><td>클래스 taxonomy, 파일 저장 형식, 앱 전체 undo.</td></tr>
+<tr><td>UILayer</td><td>선택형 toolbar/statusbar/context menu.</td><td>카메라·LUT 상태의 별도 복사본.</td></tr>
+<tr><td>TileCache</td><td>대형 이미지의 가시 타일·LOD·비동기 생산·cache·예산.</td><td>UI·ROI·window message.</td></tr>
+</tbody></table></div>
+<h3>파일을 나누는 것과 클래스를 나누는 것은 다르다</h3>
+<pre><code>ImageViewNext/
+  ImageView.h / .cpp           공개 API
+  ImageViewImpl.h / .cpp       객체 연결·초기화·종료
+  ImageViewImpl_Input.cpp      같은 Impl의 입력 처리
+  ImageViewImpl_Render.cpp     같은 Impl의 렌더 루프
+  Engine.h / .cpp              GPU와 출력
+  Camera.h / .cpp              좌표·줌·팬·관성
+  Layer.h                     공통 레이어 인터페이스
+  FrameContext.h              이번 frame의 참조와 값
+  Layers/
+    ImageLayer.h / .cpp
+    ImageLayer_Texture.cpp    같은 ImageLayer의 texture/pool 함수
+    OverlayLayer.h / .cpp
+    ROILayer.h / .cpp
+    ROILayer_Edit.cpp         같은 ROILayer의 편집 함수
+    UILayer.h / .cpp
+  Image/
+    TileCache.h / .cpp
+    ImageSource.h             필요 영역을 읽는 계약
+  Drawing/
+    Shape.h                   도형 값 데이터와 style
+    DrawShape.cpp             공통 그리기 함수
+    HitTest.cpp               공통 기하 계산
+  Wpf/                        얇은 native 호출 래퍼 / 호스트
+  Shaders/  Samples/  Tests/</code></pre>
+<p>클래스가 크면 먼저 관련 함수들을 cpp 파일로 나눈다. 독립적인 수명·상태·교체 필요가 있을 때 보조 클래스로 분리한다. <code>TileCache</code>는 그 기준에 맞지만, vector를 감싸는 PassList는 초기에는 필요 없다.</p>
+</section><section id="class-design"><h2><span class="n">04 / OWNERSHIP</span>한 객체를 두 곳에서 소유하지 않는다</h2><figure class="class-figure"><figcaption><strong>클래스 소유 관계</strong><a href="diagrams/ownership.svg" target="_blank" rel="noopener">원본 그림 크게 보기 ↗</a></figcaption><div class="diagram-scroll"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1210" role="img" aria-labelledby="ownership-title"><title id="ownership-title">B. 소유 관계 — Impl이 중심이고 layers가 레이어를 소유</title>
+<defs><marker id="arrow-ownership" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">B. 소유 관계 — Impl이 중심이고 layers가 레이어를 소유</text>
+<text x="32" y="74" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">중첩 박스 = 독점 소유. 점선 = 빌려 쓰는 참조. 기본 구성은 뷰어마다 Engine 1개다.</text>
+<rect x="32" y="103" width="1136" height="100" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="134" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageView</text>
+<text x="50" y="163" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">unique_ptr&lt;ImageViewImpl&gt; impl</text>
+<rect x="32" y="237" width="1136" height="816" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="50" y="268" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageViewImpl</text>
+<text x="50" y="297" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">아래 객체를 소유. 렌더 스레드 종료와 레이어 정리를 마친 뒤 파괴한다.</text>
+<rect x="54" y="319" width="340" height="120" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="72" y="350" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Engine</text>
+<text x="72" y="379" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">unique_ptr&lt;Engine&gt;</text>
+<text x="72" y="404" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">ComRef&lt;T&gt; / 자동 Release</text>
+<rect x="424" y="319" width="340" height="120" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="442" y="350" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Camera</text>
+<text x="442" y="379" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">값 멤버</text>
+<text x="442" y="404" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">center / zoom / velocity</text>
+<rect x="794" y="319" width="352" height="120" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="812" y="350" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">스레드와 예약 상태</text>
+<text x="812" y="379" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">jthread · mutex · 요청 queue</text>
+<text x="812" y="404" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">OS 입력 / capture 상태</text>
+<rect x="54" y="481" width="1092" height="468" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="72" y="512" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">layers : vector&lt;unique_ptr&lt;Layer&gt;&gt;</text>
+<text x="72" y="541" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">레이어의 유일한 소유자. imageLayer / roiLayer 같은 멤버는 검색용 비소유 포인터다.</text>
+<rect x="76" y="566" width="502" height="237" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="94" y="597" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageLayer</text>
+<text x="94" y="626" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">texture: ComRef&lt;T&gt; · CPU 이미지 owner</text>
+<text x="94" y="651" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">등록된 shared slot 목록 + pending frame</text>
+<text x="94" y="676" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">TileCache (대형 이미지일 때 생성)</text>
+<text x="94" y="701" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">  └ tile cache / 작업 queue / worker / 예산</text>
+<text x="94" y="726" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">  └ ImageSource 참조 (메모리 / 영역 읽기)</text>
+<rect x="608" y="566" width="516" height="112" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="626" y="597" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">OverlayLayer</text>
+<text x="626" y="626" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">vector&lt;Shape&gt; + style</text>
+<text x="626" y="651" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">도형 데이터와 공통 그리기 함수</text>
+<rect x="608" y="699" width="516" height="104" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="626" y="730" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ROILayer</text>
+<text x="626" y="759" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">vector&lt;ROI&gt; + 선택/편집 상태</text>
+<text x="626" y="784" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">도형 표시 · hit-test · 작성/수정</text>
+<rect x="76" y="826" width="502" height="99" rx="10" fill="#edf8f3" stroke="#83b7a0" stroke-width="1.5"/>
+<text x="94" y="857" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">UILayer  [필요할 때만 생성]</text>
+<text x="94" y="886" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">버튼 / 메뉴 / 상태바 → 공개 기능 호출</text>
+<rect x="608" y="826" width="516" height="99" rx="10" fill="#edf8f3" stroke="#83b7a0" stroke-width="1.5"/>
+<text x="626" y="857" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">사용자 정의 Layer  [선택]</text>
+<text x="626" y="886" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">그래프 · 차트 · 히트맵 / Render 재정의</text>
+<text x="76" y="999" fill="#2467b3" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="16" font-weight="700">FrameContext = 이번 프레임의 Engine 참조 + Camera 변환 + dt + 크기</text>
+<polyline points="1124,580 1160,580 1160,457 223,457 223,439" fill="none" stroke="#59768d" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow-ownership)"/>
+<text x="685" y="477" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">레이어가 Engine을 다시 소유하지 않음</text>
+<text x="32" y="1100" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">CPU 이미지: 복사해서 보관하거나 owner를 함께 유지한다. 비동기 처리에 raw pointer만 남기지 않는다.</text>
+<text x="32" y="1125" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">외부 texture: ComRef::CopyFrom으로 참조를 확보하고 복사 시 AddRef / 소멸 시 Release한다. GPU 사용 lease는 별도로 유지한다.</text>
+<text x="32" y="1150" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">종료: 새 입력 중단 → 타일 작업 취소 → 렌더 중 사용 정리 → 레이어 파괴 → Engine 파괴.</text>
+<text x="32" y="1175" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">HWND는 생성한 UI 스레드에서 닫는다. GPU 자원 정리와 HWND 파괴 순서는 종료 함수에서 조율한다.</text>
+</svg></div></figure>
+<p><code>layers</code>가 모든 레이어의 유일한 소유자다. 특정 기능에 빠르게 접근하려고 보관하는 <code>ImageLayer* imageLayer</code>, <code>ROILayer* roiLayer</code>는 비소유 참조다. 레이어를 제거할 때 해당 참조도 비우며, 외부에서는 이 포인터를 보관하지 않는다.</p>
+<p><code>FrameContext</code>는 큰 관리 객체가 아니다. 이번 프레임의 Engine 참조, Camera 변환, 화면 크기, dt 등을 담는 작은 구조체다. 각 레이어가 필요한 것을 전역 변수나 Impl을 거쳐 찾아가지 않게 인수로 전달한다. 레이어는 context를 프레임 밖에 보관하지 않는다.</p>
+<h3>COM 포인터 관리: 복사 가능한 ComRef&lt;T&gt;</h3>
+<p><strong>이름은 ComRef, 참조 인수는 Attach, 참조 추가는 CopyFrom으로 확정한다.</strong> COM 참조 하나를 관리하는 복사·이동 가능한 RAII 템플릿이다. 복사 시 AddRef, 소멸 시 Release한다. 별도 참조 카운트나 shared_ptr 관리 블록은 만들지 않고 COM 객체의 기존 카운트를 사용한다. 내부 공통 헤더에 두고 D3D11·DXGI·D2D·DirectWrite에 동일한 타입을 사용한다.</p>
+<div class="table"><table><thead><tr><th>동작</th><th>참조 수와 소유권 계약</th></tr></thead><tbody>
+<tr><td>기본 생성 / 소멸</td><td>nullptr로 시작. 소멸 시 보유한 참조를 Release한다.</td></tr>
+<tr><td>Attach(pointer)</td><td>호출자가 가진 기존 소유 참조 하나를 인수. 새 포인터에 AddRef하지 않으며, 기존에 보관하던 참조는 Release한다. 호출자는 넘긴 참조를 더 이상 해제하지 않는다.</td></tr>
+<tr><td>CopyFrom(pointer)</td><td>빌린 포인터에 AddRef하여 자신의 참조 하나를 확보. 새 포인터를 먼저 AddRef하고 기존 참조를 Release하므로 같은 객체를 가리키는 경우에도 유효하다. nullptr이면 기존 참조만 정리한다.</td></tr>
+<tr><td>복사 생성 / 복사 대입</td><td>같은 COM 객체를 가리키고 AddRef한다. 복사 대입은 새 참조 확보 후 기존 참조를 Release한다. 자기 대입도 안전하게 처리한다.</td></tr>
+<tr><td>이동 생성 / 이동 대입</td><td>AddRef 없이 참조를 이전하고 원본을 nullptr로 만든다. 이동 대입은 목적지의 기존 참조를 Release한다. 자기 이동 대입은 참조를 잃지 않게 처리한다.</td></tr>
+<tr><td>Get() / operator-&gt;</td><td>잠깐 사용할 raw pointer 제공. 참조 수 변화 없음. 받은 쪽이 Release하지 않는다.</td></tr>
+<tr><td>Put()</td><td>빈 ComRef에만 COM 출력 인수 T** 제공. 보관 중인 포인터를 덮어쓰지 않는다. 생성·교체 시에는 빈 임시 ComRef를 사용한다.</td></tr>
+<tr><td>Reset()</td><td>보유 참조를 Release하고 nullptr로 만든다. 빈 상태에서도 안전하며 device lost·명시적 종료에 사용한다.</td></tr>
+</tbody></table></div>
+<pre><code>#include &lt;utility&gt;  // for std::move
+
+ComRef&lt;ID3D11Texture2D&gt; displayTexture;
+
+// 생성 실패 시 기존 표시 texture를 유지한다.
+ComRef&lt;ID3D11Texture2D&gt; next;
+HRESULT hr = device-&gt;CreateTexture2D(&amp;desc, nullptr, next.Put());
+if (FAILED(hr)) return hr;
+displayTexture = std::move(next);
+
+// 외부에서 빌린 texture를 비동기 처리까지 보관한다.
+ComRef&lt;ID3D11Texture2D&gt; pendingTexture;
+pendingTexture.CopyFrom(externalTexture); // AddRef
+
+auto anotherRef = pendingTexture; // 복사 생성: AddRef
+anotherRef = displayTexture;     // 복사 대입: 새 참조 확보 후 기존 참조 반환
+
+// createdTexture는 생성 API가 성공 시 반환한 소유 참조다.
+ComRef&lt;ID3D11Texture2D&gt; imported;
+imported.Attach(createdTexture); // AddRef 없이 참조 인수
+createdTexture = nullptr;        // 호출자에게 해제 책임이 남지 않음
+</code></pre>
+<p><code>Attach(ref.Get())</code>처럼 빌린 포인터를 소유 참조인 것처럼 넘기지 않는다. Attach에는 실제로 이전할 참조 하나가 있어야 한다. 동일한 주소라도 별도로 확보한 소유 참조가 넘어올 수 있으므로, 포인터 주소만 같다고 무조건 건너뛰는 구현은 하지 않는다. 추가 참조가 필요한 경우에는 CopyFrom 또는 ComRef의 복사를 사용한다.</p>
+<p>raw pointer를 받는 모호한 암시적 생성자·대입 연산자는 두지 않는다. raw pointer 경계에서는 Attach/CopyFrom으로 의도를 드러내고, ComRef 사이에서는 일반 복사·이동을 사용한다. 이 타입은 COM 객체 전체를 독점 소유하는 것이 아니라 자신이 가진 참조 한 개의 반환을 책임진다.</p>
+<ul><li><strong>정리 순서:</strong> Engine과 Layer의 ReleaseResources()에서는 필요한 순서로 Reset한다. 남은 참조는 멤버 소멸로 정리한다.</li><li><strong>스레드:</strong> ComRef의 복사 기능이 같은 포인터 변수에 대한 동시 접근이나 COM 인터페이스 사용을 자동으로 동기화하지 않는다. 렌더 스레드와 종료 경계를 유지한다.</li><li><strong>GPU 동기화:</strong> AddRef는 객체 수명만 유지한다. 생산자의 동시 쓰기, GPU 읽기 완료, frame lease 반환은 별도 동기화가 필요하다.</li><li><strong>검증:</strong> 가짜 COM 객체로 복사 생성·대입·자기 대입·이동·자기 이동·Attach·CopyFrom·Reset·소멸의 참조 수를 확인한다. 같은 객체에 대한 CopyFrom과 별도 참조를 인수하는 Attach도 포함한다.</li></ul>
+<h3>기본은 뷰마다 Engine 하나</h3>
+<p>시작부터 여러 창이 device를 공유하는 복잡한 관리 구조를 만들지 않는다. 기본은 뷰어 한 개가 Engine 한 개를 소유하고 하나의 렌더 스레드가 사용한다. 여러 창을 실제로 연결해 메모리·지연 문제가 확인되면, 그때 Engine 공유 방식을 별도 설계한다.</p>
+<p>공유가 필요한 시점에는 Engine을 shared_ptr로 바꾸는 것만으로 끝나지 않는다. 같은 immediate context의 직렬 실행, 화면별 출력, 모든 창의 device lost 복구를 함께 조율해야 한다. 이 제약은 후속 작업으로 명확히 남긴다. 다른 device에서 생산한 shared texture 입력은 기본 구조에서도 지원한다.</p>
+</section><section id="flow"><h2><span class="n">05 / CALL FLOW</span>호출 흐름도 몇 단계면 충분하다</h2>
+<h3>이미지 표시</h3><pre><code>앱: view.SetImage(image)
+  → Impl: 이미지 교체 예약 + 렌더 깨우기
+  → ImageLayer: 원본 수명 확보 / texture 또는 TileCache 준비
+  → ImageLayer::Render(): 그림
+  → Engine::EndFrame(): 화면 출력</code></pre>
+<h3>마우스 입력</h3><pre><code>창 메시지 → Impl::HandleInput()
+  → capture 중인 대상이 있으면 그 대상에 전달
+  → popup / 위쪽 UI·사용자 레이어부터 처리 기회
+  → ROILayer: 선택·편집
+  → 처리되지 않은 navigation 입력은 Camera: 줌·팬</code></pre>
+<p>입력 순서는 그리기 순서의 역순을 기본으로 하되, drag capture가 우선한다. capture는 작은 target ID로 기록하면 된다. 마우스를 누른 대상과 뗄 때 받는 대상이 달라지지 않게 하고, 창 비활성·capture loss 때 Cancel을 보낸다.</p>
+<h3>렌더 한 번</h3><pre><code>Impl::RenderFrame()
+  1. 예약된 이미지·설정·입력을 반영
+  2. Camera.Update(dt)
+  3. layers의 Prepare(context) 호출
+  4. Engine.BeginFrame()
+  5. layers를 순서대로 Render(context)
+  6. Engine.EndFrame()
+  7. 애니메이션·타일·새 frame이 남으면 예약, 없으면 대기</code></pre>
+<p>레이어 항목에 <code>stage + order</code> 값만 둔다. 이미지의 D3D 단계와 overlay/UI의 D2D 단계를 구분하고, Impl이 단계 경계에서 Engine의 begin/end 함수를 호출한다. 사용자 레이어가 BeginDraw/EndDraw/Present를 직접 호출하지 않게 한다. 순서 정렬과 실행은 짧은 함수로 충분하다.</p>
+<figure class="class-figure"><figcaption><strong>스레드와 호출 위치</strong><a href="diagrams/thread-map.svg" target="_blank" rel="noopener">원본 그림 크게 보기 ↗</a></figcaption><div class="diagram-scroll"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 910" role="img" aria-labelledby="thread-map-title"><title id="thread-map-title">C. 실행 흐름 — 별도 Router · Executor 클래스를 만들지 않는다</title>
+<defs><marker id="arrow-thread-map" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">C. 실행 흐름 — 별도 Router · Executor 클래스를 만들지 않는다</text>
+<rect x="32" y="100" width="352" height="652" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="50" y="131" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">UI / 호스트 스레드</text>
+<rect x="424" y="100" width="352" height="652" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="442" y="131" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Impl의 렌더 스레드</text>
+<rect x="816" y="100" width="352" height="652" rx="10" fill="#fff6e7" stroke="#d6b77b" stroke-width="1.5"/>
+<text x="834" y="131" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">TileCache의 작업 스레드</text>
+<rect x="52" y="182" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="70" y="213" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">창 메시지 / 공개 API</text>
+<text x="70" y="242" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">입력 좌표와 시각 정규화</text>
+<text x="70" y="267" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">예약 상태·queue에 저장</text>
+<rect x="444" y="182" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="462" y="213" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">예약 반영</text>
+<text x="462" y="242" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">입력 → UILayer / ROI / Camera</text>
+<text x="462" y="267" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">이미지·설정 변경 반영</text>
+<polyline points="364,245 444,245" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="383" y="230" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">전달</text>
+<rect x="444" y="354" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="462" y="385" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">Camera 갱신 / Prepare</text>
+<text x="462" y="414" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">줌·팬·관성 계산</text>
+<text x="462" y="439" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">가시 타일 요청·완료 수거</text>
+<polyline points="600,306 600,354" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<rect x="836" y="354" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="854" y="385" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">타일 읽기·축소</text>
+<text x="854" y="414" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">source owner / revision 유지</text>
+<text x="854" y="439" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">CPU 결과 버퍼 반환</text>
+<polyline points="756,386 836,386" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="775" y="372" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">요청</text>
+<polyline points="836,451 756,451" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="775" y="438" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">결과</text>
+<rect x="444" y="526" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="462" y="557" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">layers 순서대로 Render</text>
+<text x="462" y="586" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Image → Overlay → ROI → UI</text>
+<text x="462" y="611" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Engine::EndFrame에서 출력</text>
+<polyline points="600,478 600,526" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<rect x="52" y="526" width="312" height="124" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="70" y="557" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">호스트 이벤트 수신</text>
+<text x="70" y="586" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">선택·편집 완료·오류 통지</text>
+<text x="70" y="611" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">WPF는 Dispatcher 사용</text>
+<polyline points="444,588 364,588" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-thread-map)"/>
+<text x="382" y="573" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="14" font-weight="700">이벤트</text>
+<text x="32" y="801" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">GPU context는 Impl 렌더 스레드에서만 사용한다. 타일 작업은 CPU 버퍼를 만든 뒤 반환한다.</text>
+<text x="32" y="826" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">스레드가 셋이라고 관리 클래스 셋이 필요한 것은 아니다. jthread와 작은 queue를 해당 소유자 안에 둔다.</text>
+<text x="32" y="851" fill="#526a80" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">렌더할 일이 없으면 대기하고, 입력·새 프레임·타일 도착·애니메이션이 있을 때만 깨어난다.</text>
+</svg></div></figure>
+<h3>단순하게 유지해도 지켜야 할 수명 규칙</h3>
+<ul><li>GPU context는 렌더 스레드에서 사용. UI는 예약 상태나 유한 queue를 통해 요청한다.</li><li>CPU 입력은 동기 복사 또는 owner/lease를 함께 넘김. <code>span</code>이나 raw pointer만 비동기 queue에 남기지 않는다.</li><li>release·편집 완료 같은 사용자 콜백은 내부 lock 밖에서 호출한다. 콜백에서 Close를 요청할 수 있지만 자신의 종료를 동기 대기하지 않는다.</li><li>Close는 새 입력 차단 → 타일 작업 취소 → pending 반환 → GPU 사용 정리 → 레이어 → Engine 순서다. HWND는 UI 스레드에서 정리하고, 종료 완료 뒤에는 callback이 남지 않는다.</li><li>입력 좌표는 실제 표시된 camera 변환을 기준으로 계산한다. 확대 중인 목표 배율과 화면에 표시된 배율을 혼용하지 않는다.</li></ul>
+<p class="note">D3D11의 device와 immediate context는 스레드 규칙이 다르다. <a href="https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-render-multi-thread-intro">Microsoft: D3D11 멀티스레딩</a></p>
+</section><section id="layers"><h2><span class="n">06 / LAYERS</span>커스텀 기능도 기존처럼 Layer로 확장한다</h2>
+<p>그래프·차트·특수 표시를 추가하려면 사용자 <code>Layer</code>를 등록하면 된다. 새로운 Component·Pass·Canvas 계층을 모두 도입하지 않는다. 한 번 그리는 기능에는 callback을 감싼 작은 Layer도 제공할 수 있다.</p>
+<pre><code>// 개념 예시. C++ 앱은 같은 SDK / 툴체인 조건에서 사용한다.
+class Layer {
+public:
+    virtual ~Layer() = default;
+    virtual void Prepare(FrameContext&amp;) {} // upload·자원 준비
+    virtual void Render(FrameContext&amp;) = 0;
+    virtual bool OnInput(const InputEvent&amp;) { return false; }
+    virtual void OnDeviceLost() {}          // GPU 자원만 비움
+};
+
+class GraphLayer final : public Layer {
+public:
+    void Render(FrameContext&amp; frame) override;
+};
+
+auto graphId = view.AddLayer(
+    std::make_unique&lt;GraphLayer&gt;(), LayerPosition::AboveROI);
+view.RemoveLayer(graphId);</code></pre>
+<p>레이어 등록 시 소유권은 뷰어로 이전한다. 그리는 중에 RemoveLayer가 들어오면 다음 안전한 경계에서 제거하고 완료를 알린다. callback이 참조하는 데이터와 외부 DLL은 제거 완료까지 살아 있어야 한다. 이것은 별도 Registration 서비스 없이 ID와 완료 통지로도 구현할 수 있다.</p>
+<p>도형의 공통 표현은 <code>Shape = variant&lt;Rect, Ellipse, Polyline, Polygon, ...&gt;</code> 같은 값 데이터로 두고, OverlayLayer와 ROILayer가 같은 <code>DrawShape()</code>를 사용한다. 도형마다 OverlayRenderer와 ROIRenderer를 각각 만들 필요가 없다. 선택 핸들·편집 계산은 ROILayer에 추가한다.</p>
+<p>일반 확장은 공통 도형/텍스트 함수를 사용하고, 특별한 shader가 필요한 Layer만 렌더 스레드의 D3D context를 제한적으로 사용한다. Engine은 다음 layer에 필요한 pipeline 상태를 다시 설정한다. D2D state block만으로 clip stack이나 D3D 상태 전부가 복구된다고 약속하지 않는다. <a href="https://learn.microsoft.com/en-us/windows/win32/api/d2d1/ns-d2d1-d2d1_drawing_state_description">D2D drawing state 구성</a></p>
+<div class="callout"><strong>Layer 단위는 사용자에게 보이는 기능 묶음이다.</strong> 픽셀 격자는 ImageLayer의 표시 옵션, 선택 핸들은 ROILayer의 기능으로 시작해도 된다. 독립적인 순서·교체가 필요해질 때에만 별도 layer로 뺀다.</div>
+</section><section id="tiles"><h2><span class="n">07 / LARGE IMAGE</span>타일은 TileCache 하나로 묶고 내부부터 제대로 만든다</h2>
+<p><code>ImageLayer</code>가 작은 이미지를 texture 하나로 처리하고, 큰 이미지일 때 <code>TileCache</code>를 생성한다. TileCache 내부에 cache·작업 queue·worker·예산·우선순위를 멤버로 둔다. 각각을 Scheduler, Pipeline, Service로 이름 붙여 독립 객체로 만들 필요는 없다.</p>
+<pre><code>ImageLayer
+  ├─ 일반 이미지 → texture 하나
+  └─ 큰 이미지   → TileCache
+                    ├─ 원본 ImageSource 참조
+                    ├─ 필요한 타일 계산 / LOD 선택
+                    ├─ CPU 작업 queue + jthread
+                    ├─ 준비된 CPU 타일 / GPU 타일
+                    └─ 메모리·업로드 예산</code></pre>
+<h3>ImageSource는 분리할 이유가 있다</h3>
+<p>RAM 버퍼와 거대 이미지 파일은 읽는 방법이 다르다. <code>ReadRegion(level, rect)</code>처럼 필요한 부분을 읽는 작은 계약을 두면 TileCache는 파일 형식을 몰라도 된다. 처음에는 MemoryImageSource만 구현하고, 실제로 큰 파일을 지원할 때 파일 어댑터를 추가한다. 모든 소스에 interface 계층을 여러 단계 만들지는 않는다.</p>
+<div class="table"><table><thead><tr><th>필요한 개선</th><th>TileCache 안에서의 구현</th></tr></thead><tbody>
+<tr><td>축소 품질</td><td>한 픽셀씩 건너뛰는 방식 대신 low-pass 축소 피라미드. 원본 정량 값과 화면용 LOD는 구분.</td></tr>
+<tr><td>응답성</td><td>CPU 읽기·축소는 worker. 렌더 스레드는 완료 수거와 제한량 업로드만 수행.</td></tr>
+<tr><td>빈 타일 처리</td><td>먼저 overview를 준비하고, 준비되지 않은 타일은 부모 레벨의 해당 영역을 표시. 최초 준비 중에는 로딩 상태 표시.</td></tr>
+<tr><td>경계 이음새</td><td>512px interior를 시작점으로, 필터 폭에 맞는 gutter 추가. 인접 타일과 전역 sampling 좌표를 일치시킴.</td></tr>
+<tr><td>예산</td><td>CPU cache·진행 중 decode·GPU cache·upload bytes를 각각 제한. 가시 타일과 fallback 부모를 축출하지 않음.</td></tr>
+<tr><td>빠른 팬 / 관성</td><td>이동 중 생산을 전부 멈추지 않고 가시 영역과 이동방향을 낮은 예산으로 계속 준비.</td></tr>
+<tr><td>이미지 교체</td><td>source revision 증가, 작업 취소. 늦게 도착한 이전 결과는 버리고 owner를 반환.</td></tr>
+<tr><td>큰 좌표</td><td>크기·offset은 checked 64bit, 카메라는 double, GPU에는 카메라 근처 상대좌표.</td></tr>
+</tbody></table></div>
+<p>현재 구현에도 동적 LOD, 부모 fallback, 업로드 예산, 현재 frame 타일 보호가 있다. 새 설계에서는 이 장점을 유지하면서 전체 원본 RAM 상주와 렌더 경로의 동기 타일 생산을 개선한다. <a href="#e04">현재 코드 근거 E04</a></p>
+<p>100,000×100,000 Gray16 원본은 약 18.6GiB다. 전체 로드가 어려운 파일은 원본 피라미드 활용이나 사전 변환이 필요할 수 있다. JPEG/PNG에 영역 읽기 함수를 제공한다고 실제 부분 디코딩 비용까지 자동 해결되지는 않는다.</p>
+<p class="note">D3D11.2의 hardware tiled resources는 존재하지만 초기에는 일반 texture/array 기반 cache를 권한다. 지원 조건과 복잡성에 비해 실제 이득이 확인될 때 선택한다. <a href="https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-2-features">D3D11.2 기능</a></p>
+</section><section id="stream"><h2><span class="n">08 / TEXTURE INPUT</span>공유 텍스처도 ImageLayer의 기능으로 둔다</h2><figure class="class-figure"><figcaption><strong>외부 프레임과 공유 풀</strong><a href="diagrams/frame-lifetime.svg" target="_blank" rel="noopener">원본 그림 크게 보기 ↗</a></figcaption><div class="diagram-scroll"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 850" role="img" aria-labelledby="frame-lifetime-title"><title id="frame-lifetime-title">D. 외부 텍스처 — ImageLayer의 멤버와 함수로 처리</title>
+<defs><marker id="arrow-frame-lifetime" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="#59768d"/></marker></defs>
+<rect width="1200" height="100%" fill="#f7f9fc"/>
+<text x="32" y="42" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="25" font-weight="700">D. 외부 텍스처 — ImageLayer의 멤버와 함수로 처리</text>
+<rect x="32" y="100" width="530" height="118" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="50" y="131" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">외부 생산자 / Decoder</text>
+<text x="50" y="160" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">원본 texture pool 소유</text>
+<text x="50" y="185" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">쓰기 완료 + slot / generation / sequence 전달</text>
+<rect x="638" y="100" width="530" height="118" rx="10" fill="#18486e" stroke="#18486e" stroke-width="1.5"/>
+<text x="656" y="131" fill="#fff" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageView::SubmitFrame()</text>
+<text x="656" y="160" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">Impl이 ImageLayer의 pending 상태에 전달</text>
+<text x="656" y="185" fill="#e3edf6" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">accepted는 접수 성공이며 GPU 사용 완료가 아님</text>
+<polyline points="562,160 638,160" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-frame-lifetime)"/>
+<rect x="32" y="278" width="1136" height="355" rx="10" fill="#eff3f8" stroke="#a9bfd2" stroke-width="1.5"/>
+<text x="50" y="309" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">ImageLayer</text>
+<text x="50" y="338" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">별도 FrameIngress 서비스 없음</text>
+<rect x="54" y="362" width="342" height="144" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="72" y="393" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">sharedSlots / poolGeneration</text>
+<text x="72" y="422" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">ComRef&lt;T&gt; / 자동 Release</text>
+<text x="72" y="447" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">sync 정보 · format · adapter</text>
+<text x="72" y="472" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">풀 교체 시 generation 변경</text>
+<rect x="429" y="362" width="342" height="144" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="447" y="393" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">optional&lt;PendingFrame&gt;</text>
+<text x="447" y="422" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">slot · sequence · generation</text>
+<text x="447" y="447" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">원본 사용을 유지하는 lease</text>
+<text x="447" y="472" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">덮인 pending도 정확히 1회 반환</text>
+<rect x="804" y="362" width="342" height="144" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="822" y="393" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">표시용 texture</text>
+<text x="822" y="422" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">동기화 후 source를 GPU copy</text>
+<text x="822" y="447" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">화면은 복사본으로 유지</text>
+<text x="822" y="472" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">직접 sampling은 후속 선택</text>
+<polyline points="771,438 804,438" fill="none" stroke="#59768d" stroke-width="2" marker-end="url(#arrow-frame-lifetime)"/>
+<text x="55" y="555" fill="#2467b3" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="17" font-weight="700">Prepare(): 새 frame 확인 → 읽기 동기화 → GPU copy → 안전한 source 반환</text>
+<text x="55" y="588" fill="#203c55" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="16" font-weight="400">Render(): 표시용 texture를 그림. source 반환과 실제 화면 표시는 서로 다른 사건이다.</text>
+<rect x="32" y="684" width="1136" height="105" rx="10" fill="#fff" stroke="#bbcedf" stroke-width="1.5"/>
+<text x="50" y="715" fill="#173653" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="18" font-weight="700">종료 / 풀 교체 / 프레임 drop에도 같은 반환 규칙</text>
+<text x="50" y="744" fill="#4a647b" font-family="Segoe UI,Malgun Gothic,sans-serif" font-size="15" font-weight="400">사용하지 않은 frame도 lease를 반환한다. 사용 중인 frame은 마지막 GPU 읽기의 동기화가 보장된 뒤 반환한다.</text>
+</svg></div></figure>
+<p>풀 등록은 <code>ImageLayer::RegisterTexturePool()</code>, frame 접수는 <code>SubmitFrame()</code>, 실제 소비는 <code>Prepare()</code>로 충분하다. <code>SharedSlot</code>과 <code>PendingFrame</code>은 작은 데이터 구조체이며 서비스 계층이 아니다.</p>
+<pre><code>ImageLayer의 멤버 예시
+  vector&lt;SharedSlot&gt; sharedSlots;
+  uint64_t poolGeneration;
+  optional&lt;PendingFrame&gt; pending;
+  ComRef&lt;ID3D11Texture2D&gt; displayTexture; // 자체 RAII / 자동 Release
+
+PendingFrame에 포함할 값
+  slot / poolGeneration / sequence / timestamp
+  원본 사용 owner 또는 lease / 완료 callback</code></pre>
+<ul><li>NT handle과 legacy handle은 명시적으로 구분하고 등록 때 한 번 열어 둔다. NT의 소유/복제/Close 규칙과 legacy 수명을 섞지 않는다.</li><li>같은 device texture도 AddRef만으로 생산자 동시 쓰기가 해결되지 않는다. 준비와 반환 동기화를 별도로 합의한다.</li><li>기본은 viewer 소유 texture로 copy하여 표시한다. 직접 sampling은 지원 format·동기화·pool 점유를 검증한 뒤 추가한다.</li><li>pool generation으로 교체 전 요청을 거른다. 새 풀은 전부 검증한 뒤 교체하고, 옛 frame이 새 풀의 같은 slot 번호를 읽지 않게 한다.</li><li>pending 덮어쓰기, 접수 실패, timeout, device lost, 종료의 모든 경로에서 소유권을 명시한다. Accepted면 뷰어가 반환 책임, Rejected면 호출자가 계속 소유한다.</li><li>frame 접수 성공, source를 다시 써도 되는 시점, 실제 화면 표시 시점을 구분한다. GPU 읽기와 다음 쓰기의 순서는 keyed mutex/fence 등 합의된 방식으로 보장한다.</li><li>AcquireSync는 S_OK를 정확히 검사한다. timeout은 기존 화면 유지/drop, abandoned는 풀 무효화로 구분한다. Flush는 제출이며 일반적인 GPU 완료 대기가 아니다.</li></ul>
+<p>처음은 검증된 BGRA 경로를 보장하고, NV12/P010은 plane·색역·range·변환 shader를 구현한 뒤 지원한다. 단순 texture copy는 format 변환이 아니다.</p>
+<p class="note"><a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiresource-getsharedhandle">공유 핸들</a> · <a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgikeyedmutex-acquiresync">AcquireSync</a> · <a href="https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-flush">Flush</a></p>
+</section><section id="interaction"><h2><span class="n">09 / CAMERA & ROI</span>관성은 Camera에, 편집은 ROILayer에 둔다</h2>
+<h3>Camera: 줌·팬·관성까지 한곳에서</h3>
+<p>Camera에 현재/목표 배율, 중심, 이동속도, animation 상태를 둔다. 오른쪽 Down은 pan 대기, DIP 기준 이동 threshold를 넘으면 drag로 확정한다. Up에서 최근 입력 timestamp로 추정한 속도를 주고, 짧은 클릭이면 context menu 요청으로 처리한다. 처음 위치로 돌아온 drag를 클릭으로 오인하지 않는다.</p>
+<pre><code>v_next = v * exp(-lambda * dt)
+delta  = v * (1 - exp(-lambda * dt)) / lambda
+center -= 화면 이동량 delta를 이미지 좌표로 변환
+
+Camera::BeginPan / DragPan / EndPan
+Camera::ZoomAt / Fit / Update(dt)</code></pre>
+<p>관성은 새 입력·편집·capture loss·source 교체 때 취소한다. release 직전 오래 멈췄으면 관성을 시작하지 않는다. 유휴 시간이 첫 animation dt에 들어가지 않게 한다. 줌은 커서 아래 이미지 좌표가 화면에 고정되도록 보간한다.</p>
+<h3>ROILayer: 값 데이터와 편집 함수</h3>
+<pre><code>ROILayer
+  vector&lt;ROI&gt; items;      // id, geometry, style, flags
+  optional&lt;RoiId&gt; selected;
+  EditState edit;          // active id, 시작 도형, drag 정보
+
+  Render() / HitTest()
+  BeginEdit() / UpdateEdit() / CommitEdit() / CancelEdit()</code></pre>
+<p>ROI가 렌더링과 편집을 함께 담당해도 괜찮다. 중요한 것은 계산과 데이터가 읽기 쉬운 형태로 모여 있는가다. 도형별 작은 계산은 공통 함수로 빼고, 편집이 커지면 먼저 <code>ROILayer_Edit.cpp</code>로 분리한다.</p>
+<p>라벨링 앱에는 Begin/Preview/Commit/Cancel과 변경 전후 geometry를 알린다. 한 번 drag는 하나의 Undo로 저장하고, 앱이 클래스·검수·저장·timeline을 담당한다. 선택 rectangle·polygon부터 구현하고 mask·tracking은 실제 요구에 맞춰 확장한다.</p>
+<h3>좌표와 픽셀 데이터</h3>
+<p>ImageSpace는 double, 픽셀 경계는 정수·중심은 x+0.5로 정의한다. UI 크기와 입력은 DIP, 실제 render target은 device pixel로 구분한다. ROI와 hit-test는 같은 표시 transform을 쓴다. 원본 픽셀 값은 LUT 적용 전, 글자 대비는 최종 표시 색 기준이다. 비정방형 픽셀의 측정 길이·각도는 calibration을 적용한 좌표에서 계산한다.</p>
+</section><section id="ui"><h2><span class="n">10 / UI & WPF</span>내장 UI를 선택하고 WPF를 얇게 연결한다</h2>
+<h3>UILayer는 없을 수도 있다</h3>
+<p>UI를 쓰지 않는 구성에서는 UILayer를 만들지 않는다. 일부만 숨길 때에는 toolbar/statusbar/menu 표시 옵션을 사용한다. 숨긴 메뉴가 capture나 입력을 유지하지 않도록 처리한다. <code>SetZoom()</code>, <code>SetLut()</code> 같은 기능은 UI 존재와 관계없이 호출할 수 있다.</p>
+<p>D3D11UIFramework의 버튼·패널·아이콘은 필요한 부분을 활용해도 된다. 먼저 빼야 할 결합은 Button 내부의 Zoom/LUT/SaveImage 전용 명령이다. 버튼은 command ID나 callback만 갖고, UILayer가 뷰어의 공통 API에 연결한다. toolbar와 menu는 같은 명령 설명 데이터를 재사용한다.</p>
+<h3>WPF 앱의 첫 구성</h3>
+<pre><code>WPF 창
+  ├─ 프로젝트·라벨 목록·속성·툴바: WPF
+  └─ HwndHost
+       └─ ImageView (UILayer 없음)
+            ├─ ImageLayer
+            ├─ OverlayLayer
+            └─ ROILayer</code></pre>
+<p>HwndHost는 간단한 시작점이다. 이미지 내부 ROI와 편집 핸들은 native layer에서 그리고, 주변 업무 UI는 WPF로 만든다. 같은 영역 위에 WPF 요소를 자유롭게 겹쳐야 하는 요구가 생기면 별도 합성 경로를 검토한다. HWND airspace 제약은 그대로 존재한다. <a href="https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/wpf-and-win32-interoperation">WPF/Win32 interop</a></p>
+<p>D3DImage는 Direct3D9 surface를 받으므로 D3D11 texture를 직접 전달할 수 없다. 필요하면 Engine의 offscreen 출력과 D3D9Ex bridge를 추가하되, 처음부터 Presenter 계층 전체를 만들지는 않는다. adapter·format·동기화·front buffer 복구를 작은 sample로 먼저 검증한다. <a href="https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/walkthrough-hosting-direct3d9-content-in-wpf">D3DImage 호스팅</a></p>
+<p>C++는 PImpl API로 시작하고, WPF에는 얇은 C ABI와 SafeHandle 래퍼를 붙인다. callback은 Dispatcher로 전달하고 종료 완료 후 delegate를 해제한다. ABI 안정성이 필요한 경계에서 STL·예외를 직접 넘기지 않는다. 프로젝트 전체를 API framework로 만드는 것은 목표가 아니다.</p>
+</section><section id="current"><h2><span class="n">11 / WHAT TO IMPROVE</span>기존 구조에서 꼭 고칠 부분은 남긴다</h2>
+<div class="table"><table><thead><tr><th>현재 관찰</th><th>단순 구조에서의 개선</th></tr></thead><tbody>
+<tr><td>레이어 목록과 별도로 멤버를 직접 호출</td><td>layers가 소유와 호출 순서의 기준. Prepare/Render 누락 방지. <a href="#e02">E02</a></td></tr>
+<tr><td>외부 레이어 비소유 포인터 + 재진입 계약 부족</td><td>등록 소유권 이전, 안전한 제거 완료, 렌더 thread와 callback 조건 명시. <a href="#e03">E03</a></td></tr>
+<tr><td>원본 CPU pointer를 비동기로 보관</td><td>복사 또는 owner 유지. 원본 반환 시점을 API에 표시. <a href="#e05">E05</a></td></tr>
+<tr><td>ROI·overlay 도형별 중복</td><td>Shape 값 타입 + DrawShape/HitTest 함수 공유. 표시와 편집 layer는 유지.</td></tr>
+<tr><td>렌더 중 타일 생산, 전체 원본 상주 전제</td><td>TileCache 내부 worker, region source, 예산과 revision. <a href="#e04">E04</a></td></tr>
+<tr><td>pool slot만 저장, 내부 lock에서 release 호출</td><td>generation과 lease를 데이터에 추가. callback은 lock 밖. 정적 위험이며 재현된 장애로 단정하지 않음. <a href="#e07">E07</a></td></tr>
+<tr><td>Inertia enum은 있지만 EndPan에서 Idle 전환</td><td>Camera에 실제 속도 추정·감쇠 추가. <a href="#e08">E08</a></td></tr>
+<tr><td>공유 엔진의 복구 범위가 context에 묶임</td><td>초기는 viewer별 Engine. 공유가 필요할 때 전체 device 복구를 함께 설계. <a href="#e11">E11</a></td></tr>
+</tbody></table></div>
+<p>현재의 유휴 렌더, 깨우기 경합 방지, anchor zoom, 동적 타일 LOD, 부모 fallback, 공유 풀 사전 등록은 유지할 가치가 있다. 새 프로젝트에서는 이 동작을 검증 항목으로 옮긴다.</p>
+<p>모던 C++ 적용은 일반 C++ 객체의 <code>unique_ptr</code>, COM 참조용 자체 RAII <code>ComRef&lt;T&gt;</code>, 도형 데이터의 <code>variant</code>, <code>jthread/stop_token</code>, <code>chrono</code>, <code>atomic/mutex</code>를 필요한 자리에 쓰는 것으로 충분하다. <code>std::expected</code>는 C++23이므로 C++20에서 기본 제공으로 가정하지 않는다. 필수 shader는 DLL에 포함해 작업 디렉터리 상대 경로 의존을 제거한다.</p>
+</section><section id="delivery"><h2><span class="n">12 / GUIDED DEVELOPMENT</span>직접 타이핑하는 개발 커리큘럼과 예상 시간</h2><p class="lead"><strong>설명을 듣고 직접 타이핑하며, 매 단계의 실행 결과를 확인하는 과정</strong>으로 진행한다. 처음에는 창과 Engine만 만들고, 이미지 → Camera → Layer 순서로 필요한 구조를 늘린다.</p>
+<div class="callout"><strong>최종 설계도는 도착점이다.</strong> 0단계부터 Impl·레이어·작업 스레드·공유 풀을 모두 만들지 않는다. 단일 스레드의 작은 프로그램을 먼저 완성하고, 기능이 늘어나는 시점에 직접 구조를 옮겨 본다.</div>
+
+<h3>시간 추정의 기준</h3>
+<ul>
+<li>C++ 클래스·포인터·기본 STL과 Win32 메시지 처리 경험이 있고, Direct3D 세부 원리는 설명을 들으며 복습한다고 가정한다. 기존 구현 경험을 반영한 개인 학습용 추정이다.</li>
+<li>아래 시간에는 개념 설명, 직접 타이핑, 컴파일 오류 수정, 실행 확인, 짧은 복습이 포함된다. 코딩만 자동으로 생성하는 시간과 다르다.</li>
+<li>프로젝트는 신규 C++20/x64, GPU는 우선 한 종류, 기본은 뷰마다 Engine 하나다. ComPtr 대신 자체 RAII <code>ComRef&lt;T&gt;</code>를 사용한다.</li>
+<li>예측하기 어려운 드라이버·환경 문제, 장기 중단 후 재학습, 큰 요구 변경은 단계별 범위에 충분히 담기 어렵다. 전체 일정에는 별도 여유를 둔다.</li>
+<li>기존 UIFramework의 사용 가능한 버튼·패널·아이콘을 활용하는 기준이다. UI toolkit 전체를 새로 만드는 시간, 완성된 CVAT 수준의 업무 앱, D3DImage 합성 bridge는 별도다.</li>
+</ul>
+
+<div class="grid">
+<div class="card"><h3>기본 뷰어 · 0~10단계</h3><p><strong>40~64시간</strong><br>이미지·줌·팬·관성·레이어·사용자 그리기·기본 DLL.</p></div>
+<div class="card"><h3>전체 권장 과정 · 0~23단계</h3><p><strong>136~225시간</strong><br>공유 풀·비동기 타일·ROI·선택 UI·WPF·공통 기능·안정화 포함.</p></div>
+<div class="card"><h3>일정으로 잡을 때</h3><p><strong>약 165~295시간</strong><br>전체 예상 범위에 약 20~30%의 재작업·환경 대응 여유를 반영한 계획값.</p></div>
+</div>
+<p class="note">이 수치는 실측 작업 기록이나 완료 보장이 아니다. 0~3단계가 끝나면 실제 소요 시간과 개념 이해도를 보고 이후 범위를 다시 조정한다.</p>
+
+<h3>단계별 개발 커리큘럼</h3>
+<p>각 행은 여러 번의 설명·타이핑 세션으로 나누어 진행한다. 완료 기준을 확인한 뒤 다음 단계로 이동한다.</p>
+<div class="table"><table class="curriculum-table"><thead><tr><th>단계</th><th>학습·개발 내용</th><th>직접 만드는 것</th><th>실행으로 확인할 완료 기준</th><th>예상 시간</th></tr></thead><tbody>
+<tr><td>0. 준비</td><td>프로젝트 구성, 빌드, Win32 메시지 루프.</td><td>작은 실행 프로젝트, 창 생성·종료, 오류 출력.</td><td>빈 창이 뜨고 닫힌다. 실행 파일·진입점·메시지 흐름을 설명할 수 있다.</td><td>2~3h</td></tr>
+<tr><td>1. COM 수명</td><td>COM 참조 수, 소유/비소유, RAII, 복사와 이동.</td><td><code>ComRef&lt;T&gt;</code>: Attach·CopyFrom·Get·Put·Reset, 복사 시 AddRef·소멸 시 Release, 이동.</td><td>가짜 COM 객체로 복사·대입·자기 대입, Attach/CopyFrom, 이동·Reset·소멸의 참조 수와 해제를 확인한다.</td><td>2~4h</td></tr>
+<tr><td>2. 엔진 기초</td><td>device, context, swapchain, backbuffer, render target, viewport.</td><td>Engine 초기화·Clear·Present·해제. 크기 변경 시 출력 자원 재생성.</td><td>배경색이 나오고 resize 후에도 정상 표시된다. 생성 역순의 정리 책임을 이해한다.</td><td>4~6h</td></tr>
+<tr><td>3. 이미지 한 장</td><td>정점·UV·shader·SRV·sampler·draw 호출.</td><td>작은 테스트 패턴 texture와 사각형 출력. 우선 Engine에서 직접 그리기.</td><td>체커/색상 패턴의 방향·UV가 맞다. CPU 데이터가 화면까지 가는 경로를 설명할 수 있다.</td><td>5~8h</td></tr>
+<tr><td>4. 이미지 입력</td><td>width/height/stride, pixel format, CPU와 GPU 메모리 수명.</td><td>BGRA8·Gray8 버퍼 입력, 안전한 복사, 이미지 교체. 테스트 이미지 파일 하나의 로드 경로.</td><td>크기와 stride가 다른 이미지가 정상 표시되고, 잘못된 입력은 거절한다.</td><td>3~5h</td></tr>
+<tr><td>5. Camera 기초</td><td>이미지 좌표·화면 좌표·DIP·device pixel, center/zoom 변환.</td><td>Camera, ImageToView/ViewToImage, Fit, 1:1.</td><td>화면 중앙·모서리의 왕복 변환이 맞고, resize 후 fit 결과가 예상과 같다.</td><td>3~5h</td></tr>
+<tr><td>6. 줌·팬</td><td>커서 기준 줌, 드래그, capture, 최소/최대 배율.</td><td>휠 ZoomAt, 오른쪽 drag pan, click/drag threshold, 취소 처리.</td><td>커서 아래 이미지 위치가 줌 중 유지되고, 창 밖에서 버튼을 떼어도 drag가 끝난다.</td><td>4~6h</td></tr>
+<tr><td>7. 애니메이션</td><td>dt, 시간 기반 보간, release velocity, 감쇠.</td><td>부드러운 줌·Fit, 관성 팬, 입력 재개 시 관성 취소.</td><td>30/60/144Hz 조건에서 이동거리·정지 시간이 유사하고, 유휴 후 첫 줌이 튀지 않는다.</td><td>4~7h</td></tr>
+<tr><td>8. Layer 도입</td><td>기존 그리기 코드를 역할별로 옮기기, 가상 함수, 소유 컨테이너.</td><td>Layer·FrameContext·ImageLayer. <code>vector&lt;unique_ptr&lt;Layer&gt;&gt;</code>로 순서대로 호출.</td><td>이동 전후 같은 이미지가 나온다. 레이어를 끄고 켜며 순서를 확인한다.</td><td>4~6h</td></tr>
+<tr><td>9. Overlay·사용자 Layer</td><td>D2D/DirectWrite 기본, 이미지/화면 좌표, 공통 도형 함수.</td><td>OverlayLayer, 선·사각형·텍스트, 간단한 GraphLayer. D3D/D2D 단계 경계.</td><td>이미지에 붙은 도형과 화면 고정 글자가 다르게 움직인다. 사용자 그래프가 정상 표시된다.</td><td>5~8h</td></tr>
+<tr><td>10. DLL로 정리</td><td>공개/비공개 API, PImpl, 생성·종료 책임, 배포 자산.</td><td>ImageView + Impl로 정리, DLL과 작은 소비 앱, shader 포함.</td><td>소비 앱이 공개 헤더로 사용하며, 작업 폴더가 달라도 실행·종료된다.</td><td>4~6h</td></tr>
+<tr><td>11. 렌더 스레드</td><td>jthread·동기화·예약 queue·on-demand 렌더·안전한 종료.</td><td>GPU 사용을 Impl의 렌더 스레드로 이동. API·입력 예약, callback 전달.</td><td>정지 화면에서는 대기하고 요청에 깨어난다. 렌더 중 닫기·레이어 제거에도 교착이 없다.</td><td>6~10h</td></tr>
+<tr><td>12. 외부 texture</td><td>COM 참조 보관, device/format 검사, 공유 handle 열기, GPU copy.</td><td>같은 device texture와 단일 shared texture 입력. 동기화가 정해진 생산자 sample.</td><td>외부 테스트 패턴이 표시되고, 접수 반환과 source 반환의 차이를 설명한다.</td><td>5~8h</td></tr>
+<tr><td>13. 공유 texture pool</td><td>slot, generation, sequence, lease, keyed mutex, 최신 frame 정책.</td><td>풀 등록·교체·해제, pending frame, drop과 반환 callback.</td><td>느린 소비·timeout·풀 교체·종료에서 lease가 정확히 한 번 반환된다.</td><td>8~14h</td></tr>
+<tr><td>14. 타일 기초</td><td>타일 좌표, 가시 영역, UV, 경계와 메모리 비용.</td><td>ImageLayer 아래 TileCache. RAM 원본을 LOD0 타일로 나누어 가시 영역 표시.</td><td>타일 경계 격자와 비정수 pan에서 틈·중복이 없다. 이 단계는 작은 데이터로 검증한다.</td><td>7~11h</td></tr>
+<tr><td>15. LOD·피라미드</td><td>low-pass 축소, level 선택, gutter, 부모 fallback.</td><td>축소 레벨과 overview, cache miss 때 부모 영역 표시, 제한된 cache 예산.</td><td>fit에서 aliasing과 경계가 개선된다. 타일이 없어도 준비된 부모로 표시한다.</td><td>8~14h</td></tr>
+<tr><td>16. 비동기 대형 이미지</td><td>source 수명·revision, 취소, worker, CPU/GPU cache 예산.</td><td>ImageSource 영역 읽기, 타일 worker, 완료 queue, 업로드 예산. synthetic/단순 파일 source.</td><td>빠른 pan·관성 중 UI가 반응하고, source 교체 뒤 옛 타일이 섞이지 않는다. 전체 원본 상주 없이 예산을 지킨다.</td><td>10~16h</td></tr>
+<tr><td>17. ROI 표시·선택</td><td>Shape 값 데이터, stable ID, hit-test, 표시 변환.</td><td>ROILayer, 사각형·폴리곤·선택 핸들, Overlay와 DrawShape 공유.</td><td>줌·DPI가 달라도 보이는 도형을 정확히 선택하고 표시할 수 있다.</td><td>6~10h</td></tr>
+<tr><td>18. ROI 편집</td><td>작성·이동·크기 조절·꼭짓점 편집, preview/commit/cancel.</td><td>ROILayer의 편집 상태와 이벤트, 호스트의 간단한 Undo/Redo.</td><td>한 drag가 한 Undo이며, Escape는 원상 복원한다. 저장할 geometry를 이벤트로 얻는다.</td><td>8~14h</td></tr>
+<tr><td>19. 선택형 내장 UI</td><td>UI와 기능 분리, command 연결, 가시성·capture.</td><td>UILayer, toolbar/statusbar/context menu. 사용 가능한 UIFramework 요소 활용.</td><td>UI OFF에서도 공개 기능은 동작하고, 숨겨진 UI가 입력을 가로채지 않는다.</td><td>6~10h</td></tr>
+<tr><td>20. WPF 연결</td><td>HwndHost, C ABI, SafeHandle, Dispatcher, DIP 변환.</td><td>ViewerControl, 선택·ROI 이벤트 연결, 작은 라벨링 sample.</td><td>반복 생성·종료, resize·DPI·포커스가 정상이고 WPF 속성창으로 선택 ROI를 확인한다.</td><td>8~14h</td></tr>
+<tr><td>21. 검사 공통 기능</td><td>Gray16·LUT·원본/표시 값 분리, 픽셀 격자, calibration.</td><td>픽셀 조회·값 표시, LUT/자동 대비, 거리·각도 측정의 최소 기능.</td><td>LUT 변경 후에도 원본 값이 유지되고, 비정방형 픽셀 보정과 텍스트 대비가 맞다.</td><td>8~14h</td></tr>
+<tr><td>22. 저장·결과 출력</td><td>원본 export와 viewport capture 구분, readback·비동기 완료.</td><td>대표 형식 저장, ROI 포함 화면 캡처, 호스트 파일 대화상자 연결.</td><td>원본 저장과 화면 저장이 의도대로 다르고, 취소·실패도 명확히 전달된다.</td><td>6~10h</td></tr>
+<tr><td>23. 안정화·배포</td><td>device lost, 부분 초기화 실패, 자원 정리, 성능·지연 계측.</td><td>복구 경로, 실제 GPU 회귀 sample, 오류 주입, Release 패키지와 사용 예제.</td><td>대표 기기에서 장시간 실행·반복 열기/닫기·복구를 확인한다. 수명/화면 정확성/성능 기록을 남긴다.</td><td>10~16h</td></tr>
+</tbody><tfoot><tr><th colspan="4">0~23단계 합계 · 각 단계 설명/타이핑/기본 검증 포함</th><th>136~225h</th></tr></tfoot></table></div>
+
+<h3>중간 완성 지점과 누적 시간</h3>
+<div class="table"><table><thead><tr><th>완성 지점</th><th>누적 시간</th><th>그때 사용할 수 있는 것</th></tr></thead><tbody>
+<tr><td>2단계 완료</td><td>8~13h</td><td>화면을 만들고 색을 출력·resize하는 최소 엔진.</td></tr>
+<tr><td>4단계 완료</td><td>16~26h</td><td>실제 이미지 입력과 교체가 가능한 출력기.</td></tr>
+<tr><td>7단계 완료</td><td>27~44h</td><td>줌·팬·관성으로 조작하는 이미지 뷰어.</td></tr>
+<tr><td>10단계 완료</td><td>40~64h</td><td>레이어·사용자 그리기를 갖춘 기본 DLL. 첫 실사용 검토 지점.</td></tr>
+<tr><td>13단계 완료</td><td>59~96h</td><td>렌더 스레드와 외부 texture pool이 있는 스트리밍 표시 기반.</td></tr>
+<tr><td>16단계 완료</td><td>84~137h</td><td>비동기 타일과 예산을 갖춘 대형 이미지 표시 기반.</td></tr>
+<tr><td>20단계 완료</td><td>112~185h</td><td>ROI 편집·선택 UI·WPF를 연결한 작은 라벨링 도구.</td></tr>
+<tr><td>23단계 완료</td><td>136~225h</td><td>공통 검사 기능·저장·복구·배포 검증을 포함한 1차 DLL.</td></tr>
+</tbody></table></div>
+<p>위 순서는 스트리밍 기능을 먼저 확인하는 권장 순서다. 기본 과정 뒤에는 <code>11 → 14~16</code>으로 타일을 먼저 진행하거나, <code>11 → 17~20</code>으로 라벨링을 먼저 진행할 수 있다. 기능 의존성이 없는 블록의 순서를 조정할 뿐, 생략한 블록의 시간까지 완료한 것으로 계산하지 않는다.</p>
+
+<h3>한 번의 수업은 60~90분 정도로 나눈다</h3>
+<ol>
+<li><strong>5분:</strong> 이전 코드의 호출 흐름과 오늘 화면에서 확인할 결과를 짚는다.</li>
+<li><strong>10~15분:</strong> 이번에 필요한 개념과 변수의 소유자를 설명한다.</li>
+<li><strong>25~35분:</strong> 함수 1~2개 또는 약 30~80줄 단위로 설명을 듣고 직접 타이핑한다. 분량은 개념의 난도에 맞춘다.</li>
+<li><strong>15~25분:</strong> 빌드·실행하고 예상 결과와 비교한다. 오류가 있으면 원인을 이해한 뒤 고친다.</li>
+<li><strong>5분:</strong> 핵심 흐름을 직접 설명하고 다음 세션의 시작 지점을 남긴다.</li>
+</ol>
+<p>새 파일을 만들 때에는 “왜 지금 필요한가 → 누가 소유하는가 → 누가 호출하는가 → 이번 단계에서 어디까지 구현하는가” 순으로 설명한다. 앞으로 구현할 기능 때문에 빈 클래스를 미리 늘리지 않는다. 엔진 생성과 이미지 출력도 한 번에 완성 코드를 옮기지 않고, 실행되는 작은 상태를 차례로 만든다.</p>
+<p>당장 구현하지 않은 항목은 단계 번호로 적어 둔다. 예를 들어 8단계의 레이어 제거는 단일 스레드 기준이고 11단계에서 비동기 제거를 보강한다. 14~15단계의 동기 타일 생산은 학습용 중간 상태이며 16단계에서 worker로 옮긴다. 2단계의 resize·정상 해제는 바로 구현하고, 전체 device 복구는 23단계에서 완성한다.</p>
+
+<h3>달력으로 환산하면</h3>
+<div class="table"><table><thead><tr><th>직접 작업 시간</th><th>전체 일정 예상 · 여유 포함</th><th>기준</th></tr></thead><tbody>
+<tr><td>주 5시간</td><td>약 33~59주</td><td>하루 1시간 × 주 5일</td></tr>
+<tr><td>주 10시간</td><td>약 17~30주</td><td>하루 2시간 × 주 5일</td></tr>
+<tr><td>주 15시간</td><td>약 11~20주</td><td>하루 3시간 × 주 5일</td></tr>
+</tbody></table></div>
+<p class="note">직접 집중한 시간을 단순 환산한 값이다. 휴가·업무 중단은 제외했다. 대기 시간이 긴 장시간 안정성 시험은 집중 작업 시간과 별도로 기록한다.</p>
+
+<h3>기본 범위 밖의 추가 과정</h3>
+<div class="table"><table><thead><tr><th>추가 요구</th><th>추가 예상</th><th>적용 조건</th></tr></thead><tbody>
+<tr><td>D3DImage / D3D9Ex 합성 bridge</td><td>12~24h</td><td>WPF 요소를 이미지 영역 위에 합성해야 할 때. 필요 여부는 초기에 결정하고 작은 기술 검증부터 진행.</td></tr>
+<tr><td>특정 대형 파일 포맷용 영역 decoder</td><td>8~20h / 대표 포맷</td><td>16단계는 source 계약·단순 파일 예제까지. 실제 포맷의 피라미드·압축·영역 decode 특성에 따라 재추정.</td></tr>
+<tr><td>UIFramework 전면 재작성</td><td>20~40h 이상</td><td>19단계는 기존 요소 활용 기준. 완전한 UI 접근성·IME 지원은 별도 범위.</td></tr>
+<tr><td>mask / brush / temporal tracking 편집</td><td>요구 확정 후 산정</td><td>기본 ROI 과정은 사각형·폴리곤과 편집 transaction. 완성형 CVAT 기능 전체를 포함하지 않음.</td></tr>
+<tr><td>여러 뷰의 device 공유</td><td>요구·측정 후 산정</td><td>기본은 뷰마다 Engine 하나. 공유 실행·출력·복구를 함께 검토.</td></tr>
+</tbody></table></div>
+
+<h3>진행 기록과 시간 보정</h3>
+<p>각 단계가 끝나면 실제 시간, 완료한 실행 결과, 남은 의문, 다음 시작 함수만 짧게 기록한다. 0~3단계 후 첫 재산정, 10단계 기본 DLL 후 두 번째 재산정, 13·16단계의 GPU 동기화와 타일 검증 후 마지막 확장 범위를 조정한다. 이해가 어려운 부분은 설명과 실험 시간을 늘리고, 이미 익숙한 부분은 빠르게 통과한다.</p>
+<div class="callout"><strong>첫 수업 목표:</strong> 신규 테스트 창을 만들고 생성·메시지·종료 흐름을 확인한다. 다음에 ComRef를 만든 뒤 D3D11 device와 swapchain을 생성한다. Layer 개념은 이미지와 Camera가 작동한 후 8단계에서 도입한다.</div>
+</section><section id="evidence"><h2><span class="n">13 / CODE EVIDENCE</span>판단의 근거가 된 현재 소스</h2>
+<p class="note">아래 줄 번호는 분석 시점 파일 기준이다. 링크는 상대 경로로 원본 파일을 가리키며 브라우저에 따라 다운로드로 열릴 수 있다. 정적 위험은 별도로 표시했다. 전체 코드의 결함 목록이나 전수 보안 감사가 아니다.</p>
+<div class="table"><table class="evidence"><thead><tr><th>ID / 판단</th><th>파일과 위치</th><th>직접 관찰 / 설계 의미</th></tr></thead><tbody>
+<tr id="e01"><td>E01<br>공개 API 결합</td><td><a href="../../D3D11ImageView/D3D11ImageView.h">D3D11ImageView.h</a><br>18–47, 66–110, 115 이후<br><a href="../../D3D11ImageView/D3D11ImageView.vcxproj">vcxproj</a> 170,183,202,221</td><td>Core/ROI/LUT include와 엔진/context 타입 노출, 도형 오버로드 반복. 이미 C++20 설정.</td></tr>
+<tr id="e02"><td>E02<br>조율 집중</td><td><a href="../../D3D11ImageView/D3D11ImageView_Impl.cpp">Impl.cpp</a><br>153–217, 345–448, 664 이후<br><a href="../../D3D11ImageView/D3D11ImageView_Impl.h">Impl.h</a></td><td>레이어 목록과 별개로 내장 UI/픽셀/외부 prepare 및 실제 draw 순서를 직접 관리. UI, image, camera, tools 상태 집중.</td></tr>
+<tr id="e03"><td>E03<br>외부 레이어 계약</td><td><a href="../../D3D11ImageView/D3D11ImageView_Impl.cpp">Impl.cpp</a><br>460–651<br><a href="../../../D3D11EngineInterface/IRenderLayer.h">IRenderLayer.h</a> 8–18</td><td>3 slot, 비소유 layer 포인터, initialize/shutdown와 D2D state block. 포괄적인 GPU/clip 격리로 해석하면 안 됨.</td></tr>
+<tr id="e04"><td>E04<br>타일 설계</td><td><a href="../../Image%20Tile/TileManager.cpp">TileManager.cpp</a><br><a href="../../Image%20Tile/TilePool.cpp">TilePool.cpp</a><br><a href="../../Image%20Tile/TileSampler.h">TileSampler.h</a> 18–37, 60 이후<br><a href="../../Render%20Layer/CpuImageView.h">CpuImageView.h</a></td><td>기존 동적 LOD·예산·fallback은 보존할 아이디어. borrowed 전체 원본, stride 점 샘플링과 동기 준비는 out-of-core·축소 품질 요구에 한계.</td></tr>
+<tr id="e05"><td>E05<br>pending input 수명</td><td><a href="../../D3D11ImageView/D3D11ImageView_Impl_Image.cpp">Impl_Image.cpp</a><br>93–112, 114–151, 175–202</td><td>rawData 포인터를 pending에 저장. texture는 AddRef, 단일 sharedHandle은 값 보관. 입력 종류마다 수명 보장이 다르므로 명시 계약 필요.</td></tr>
+<tr id="e06"><td>E06<br>공유 풀 copy 경로</td><td><a href="../../Render%20Layer/ImageRenderLayer.cpp">ImageRenderLayer.cpp</a><br>623–709, 726–789</td><td>NT/legacy API 구분, keyed mutex 필수 풀 등록, AcquireSync → 내부 texture copy → Flush → ReleaseSync. zero-copy 경로 아님.</td></tr>
+<tr id="e07"><td>E07<br><span class="tag risk">정적 위험</span></td><td><a href="../../D3D11ImageView/D3D11ImageView_Impl_Image.cpp">Impl_Image.cpp</a><br>29–83, 159–173, 290</td><td>count 검사와 큐 등록 사이 pool 교체 가능성, pending은 slot만 보관. ReleaseLease가 pending lock 내부에서도 실행. generation 및 lock 밖 반환으로 새 계약 정리. 실행 재현하지 않음.</td></tr>
+<tr id="e08"><td>E08<br>관성 미구현</td><td><a href="../../../D3D11Engine/Camera/Camera2D.cpp">Camera2D.cpp</a><br>253–286, 291 이후</td><td>Dragging에서는 offset 갱신, EndPan은 Idle. 줌/offset 감쇠와 release velocity 기반 inertia는 다른 기능.</td></tr>
+<tr id="e09"><td>E09<br>좋은 스케줄링 기반</td><td><a href="../../D3D11ImageView/RenderThread.cpp">RenderThread.cpp</a><br>70–90, 109–142<br><a href="../../D3D11ImageView/D3D11ImageView_Impl.cpp">Impl.cpp</a> 361–377</td><td>유휴 대기와 깨우기 경합 방지, idle 이후 dt 제외. 새 scheduler의 회귀 검증 기준으로 보존.</td></tr>
+<tr id="e10"><td>E10<br>UI 구성</td><td><a href="../../../D3D11UIFramework/D3D11UIFramework/Base/UIElementBase.h">UIElementBase.h</a><br><a href="../../../D3D11UIFramework/D3D11UIFramework/Button/UIButton.h">UIButton.h</a><br><a href="../../Render%20Layer/UIRenderLayer.cpp">UIRenderLayer.cpp</a></td><td>현재 위젯 base와 Button/Label 계층, view 전용 UI composition. 선택 UILayer로 구성하고, 위젯의 뷰어 전용 명령 의존을 제거.</td></tr>
+<tr id="e11"><td>E11<br><span class="tag risk">복구 범위 위험</span></td><td><a href="../../../D3D11Engine/Core/D3D11RenderContext.cpp">D3D11RenderContext.cpp</a><br>491–540</td><td>context의 로컬 listener 통지 뒤 공유 가능 engine을 재생성. 공유 엔진을 쓰는 여러 context 전체의 조율 필요. 이번 안은 먼저 viewer별 Engine을 사용. 다중 view에서 재현한 장애라고 단정하지 않음.</td></tr>
+<tr id="e12"><td>E12<br>과거 문서</td><td><a href="../active/context.md">docs/active/context.md</a><br><a href="../active/tiling-refactor-changelog.md">tiling-refactor-changelog.md</a><br><a href="../../README.md">README.md</a></td><td>타일·UI 개선과 측정 교훈 참고. context 첫 경고에 C#/WPF 및 C++ 테스트 삭제 명시. 과거 테스트 완료를 현재 테스트 존재로 오인하지 않음.</td></tr>
+</tbody></table></div>
+</section><section id="sources"><h2><span class="n">14 / SOURCES</span>분석 범위와 참고 자료</h2>
+<p>이 문서는 신규 프로젝트의 설계 제안이다. 기존 코드에 대한 정적 분석을 바탕으로 작성했으며 GPU 실행·성능을 새로 검증한 결과는 아니다. 잠재 경합은 재현된 버그와 구분했다. 이 수정에서는 기존 C++ 소스를 변경하지 않았다.</p>
+<p>기존 구조는 참고하되 새 프로젝트에서 시작한다는 목표를 유지한다. 제안 클래스명은 가칭이고 현재의 <code>D3D11ImageView</code>, <code>ImageRenderLayer</code>, <code>ROIRenderLayer</code> 이름을 그대로 사용해도 된다.</p>
+<ul><li><a href="https://learn.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-render-multi-thread-intro">D3D11 멀티스레딩</a></li><li><a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiresource-getsharedhandle">NT / legacy 공유 핸들</a></li><li><a href="https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgikeyedmutex-acquiresync">AcquireSync 결과와 동기화</a></li><li><a href="https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-flush">Flush의 비동기 동작</a></li><li><a href="https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-2-features">D3D11.2 tiled resources</a></li><li><a href="https://learn.microsoft.com/en-us/windows/win32/api/d2d1/ns-d2d1-d2d1_drawing_state_description">D2D drawing state</a></li><li><a href="https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/wpf-and-win32-interoperation">WPF airspace</a></li><li><a href="https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/walkthrough-hosting-direct3d9-content-in-wpf">D3DImage 호스팅</a></li></ul>
+<button type="button" onclick="window.print()">인쇄 / PDF 저장</button>
+</section>
+<p class="footer">D3D11ImageView Next · 단순 구조 설계 v2 · 자체 포함 SVG 그림 4장 · 2026-11-27</p></main>
+<script>const links=[...document.querySelectorAll('aside nav a')];const observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)links.forEach(a=>a.classList.toggle('active',a.hash==='#'+e.target.id));},{rootMargin:'-5% 0px -75% 0px',threshold:0});document.querySelectorAll('main section').forEach(s=>observer.observe(s));</script></body></html>
